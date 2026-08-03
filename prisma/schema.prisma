@@ -1,0 +1,125 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Employee {
+  id                 String                  @id @default(uuid())
+  name               String
+  jobTitle           String
+  phone              String                  @unique
+  avatar             String?
+  telegramId         String?                 @unique
+  status             String                  @default("PENDING_ACTIVATION") // ACTIVE, INACTIVE, PENDING_ACTIVATION
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  ledgerEntries      LedgerEntry[]
+  activationRequests ActivationRequest[]
+  monthSnapshots     EmployeeMonthSnapshot[]
+
+  @@index([name])
+  @@index([telegramId])
+  @@index([status])
+}
+
+model ActivationRequest {
+  id               String    @id @default(uuid())
+  telegramId       String
+  telegramName     String
+  telegramUsername String?
+  otpCode          String?   @unique
+  employeeId       String?
+  employee         Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  status           String    @default("PENDING") // PENDING, CODE_GENERATED, ACTIVATED, EXPIRED
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([telegramId])
+  @@index([otpCode])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id              String             @id @default(uuid())
+  operationNo     String             @unique // Format: YYYYMMDD000001
+  date            DateTime           @default(now())
+  employeeId      String
+  employee        Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type            String             // DEPOSIT, EXPENSE, ADJUSTMENT, OPENING_BALANCE
+  amount          Float
+  category        String?            // e.g. وقود, صيانة, ضيافة, إيداع عهدة
+  description     String
+  reference       String?            // Optional invoice/receipt reference number
+  createdBy       String             @default("System") // "Accountant" or "Employee Telegram"
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  attachments     LedgerAttachment[]
+  monthSnapshotId String?
+  monthSnapshot   MonthSnapshot?     @relation(fields: [monthSnapshotId], references: [id], onDelete: SetNull)
+
+  @@index([operationNo])
+  @@index([employeeId])
+  @@index([type])
+  @@index([date])
+  @@index([category])
+}
+
+model LedgerAttachment {
+  id            String      @id @default(uuid())
+  ledgerEntryId String
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  fileName      String
+  filePath      String      // Path relative to storage/receipts/
+  fileType      String      // "image/jpeg", "image/png", "application/pdf"
+  fileSize      Int
+  uploadedAt    DateTime    @default(now())
+
+  @@index([ledgerEntryId])
+}
+
+model MonthSnapshot {
+  id               String                  @id @default(uuid())
+  monthKey         String                  @unique // Format: YYYY-MM
+  closedAt         DateTime                @default(now())
+  isLocked         Boolean                 @default(false)
+  totalDeposits    Float
+  totalExpenses    Float
+  remainingBalance Float
+  excelReportPath  String?
+
+  ledgerEntries    LedgerEntry[]
+  employeeSummaries EmployeeMonthSnapshot[]
+
+  @@index([monthKey])
+}
+
+model EmployeeMonthSnapshot {
+  id                 String        @id @default(uuid())
+  monthSnapshotId    String
+  monthSnapshot      MonthSnapshot @relation(fields: [monthSnapshotId], references: [id], onDelete: Cascade)
+  employeeId         String
+  employee           Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  totalCustody       Float
+  totalExpenses      Float
+  closingBalance     Float
+  transactionCount   Int
+
+  @@unique([monthSnapshotId, employeeId])
+}
+
+model Settings {
+  id                Int      @id @default(1)
+  companyName       String   @default("شركة العهد المالية")
+  companyLogo       String?
+  telegramBotToken  String?
+  autoBackupEnabled Boolean  @default(true)
+  lastBackupAt      DateTime?
+  updatedAt         DateTime @updatedAt
+}
