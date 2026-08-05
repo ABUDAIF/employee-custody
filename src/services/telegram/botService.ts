@@ -39,7 +39,6 @@ export class TelegramBotService {
     const currentSettings = await settingsRepository.getSettings()
     let activeToken = (token || currentSettings.telegramBotToken || '').trim().replace(/^bot/i, '').replace(/["'\s]/g, '')
 
-    // Auto-detect and correct inverted token (hash:id -> id:hash)
     const invertedMatch = activeToken.match(/^([A-Za-z0-9_-]+):(\d+)$/)
     if (invertedMatch) {
       activeToken = `${invertedMatch[2]}:${invertedMatch[1]}`
@@ -52,7 +51,6 @@ export class TelegramBotService {
       return { connected: false, message: 'لم يتم تعيين Telegram Bot Token.' }
     }
 
-    // Fast HTTPS fetch check with 5s timeout
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -80,7 +78,6 @@ export class TelegramBotService {
         console.warn('Telegram Bot Warning:', err.message)
       })
 
-      // Register Handlers
       this.setupHandlers()
 
       console.log(`🤖 Telegram Bot Connected: @${botInfo.username}`)
@@ -118,16 +115,13 @@ export class TelegramBotService {
         const telegramName = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'موظف'
         const telegramUsername = msg.from?.username
 
-        // 1. Check if user is bound to an Employee
         const startResult = await activationRepository.registerTelegramStart({
           telegramId,
           telegramName,
           telegramUsername
         })
 
-        // If user is NOT activated
         if (!startResult.isActivated) {
-          // Check if text is a 6-digit OTP code
           if (/^\d{6}$/.test(text)) {
             const verify = await activationRepository.verifyOtpAndBind(telegramId, text)
             if (verify.success) {
@@ -144,7 +138,7 @@ export class TelegramBotService {
 
           await this.bot?.sendMessage(
             chatId,
-            `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**`,
+            `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**\n📞 **الهاتف:** \`+20 10 30324187\``,
             { parse_mode: 'Markdown' }
           )
           return
@@ -153,14 +147,12 @@ export class TelegramBotService {
         const employee = startResult.employee!
         let session = this.userSessions.get(telegramId) || { step: 'IDLE' }
 
-        // Handle Cancel / Reset
         if (text.includes('إلغاء') || text === '/cancel') {
           this.userSessions.delete(telegramId)
           await this.bot?.sendMessage(chatId, 'تم إلغاء العملية.', this.mainKeyboard)
           return
         }
 
-        // Handle Main Keyboard Actions (Using includes for emoji & Unicode resilience)
         if (text.includes('رصيدي')) {
           this.userSessions.delete(telegramId)
           const metrics = await employeeRepository.calculateEmployeeMetrics(employee.id)
@@ -209,7 +201,8 @@ export class TelegramBotService {
           await this.bot?.sendMessage(
             chatId,
             `🏢 **${settings.companyName}**\n\n` +
-              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشر مع قسم الحسابات.`,
+              `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
+              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
             { parse_mode: 'Markdown', ...this.mainKeyboard }
           )
           return
@@ -226,7 +219,6 @@ export class TelegramBotService {
           return
         }
 
-        // Conversational State Machine
         switch (session.step) {
           case 'AWAITING_AMOUNT': {
             const num = parseFloat(text)
@@ -293,14 +285,12 @@ export class TelegramBotService {
                 }
               })
             } else {
-              // Save immediately without attachments
               await this.finalizeExpense(chatId, telegramId, employee, session)
             }
             break
           }
 
           case 'AWAITING_ATTACHMENT': {
-            // Handle Photo or Document
             let fileId: string | null = null
             let fileName = `receipt_${Date.now()}`
             let fileType = 'image/jpeg'

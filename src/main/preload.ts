@@ -41,6 +41,9 @@ const electronAPI = {
   getBackupList: () => ipcRenderer.invoke('backup:getList'),
   restoreBackup: (fileName: string) => ipcRenderer.invoke('backup:restore', fileName),
 
+  // File Shell IPCs
+  openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
+
   // Event Listeners (Event Bus to React UI)
   on: (channel: string, callback: (...args: any[]) => void) => {
     const subscription = (_event: any, ...args: any[]) => callback(...args)

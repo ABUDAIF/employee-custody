@@ -93,7 +93,7 @@ async function startBot() {
 
         await bot.sendMessage(
           chatId,
-          `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**`,
+          `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**\n📞 **الهاتف:** \`+20 10 30324187\``,
           { parse_mode: 'Markdown' }
         )
         return
@@ -166,7 +166,8 @@ async function startBot() {
         await bot.sendMessage(
           chatId,
           `🏢 **${currentSettings?.companyName || 'شركة العهد المالية'}**\n\n` +
-            `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع قسم الحسابات.`,
+            `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
+            `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
           { parse_mode: 'Markdown', ...mainKeyboard }
         )
         return
@@ -183,7 +184,6 @@ async function startBot() {
         return
       }
 
-      // Conversational state machine
       switch (session.step) {
         case 'AWAITING_AMOUNT': {
           const num = parseFloat(text)

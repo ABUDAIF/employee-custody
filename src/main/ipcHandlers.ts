@@ -1,4 +1,6 @@
 import { ipcMain } from 'electron'
+import path from 'path'
+import fs from 'fs'
 import { employeeRepository } from '../services/repositories/EmployeeRepository'
 import { ledgerRepository } from '../services/repositories/LedgerRepository'
 import { activationRepository } from '../services/repositories/ActivationRepository'
@@ -8,6 +10,7 @@ import { telegramBotService } from '../services/telegram/botService'
 import { ExcelGenerator } from '../services/excel/excelGenerator'
 import { QRGenerator } from '../services/pdf/qrGenerator'
 import { AutoBackupService } from './autoBackup'
+import { getPermanentStorageDir } from '../services/db/prismaClient'
 
 export function registerIpcHandlers() {
   // Employee Handlers
@@ -42,7 +45,6 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('ledger:createDeposit', async (_, data: any) => {
     const entry = await ledgerRepository.createDeposit(data)
-    // Send Telegram Notification to Employee if bound
     if (entry.employee && entry.employee.phone) {
       const empFull = await employeeRepository.getEmployeeById(entry.employeeId)
       if (empFull && empFull.telegramId) {
@@ -84,10 +86,24 @@ export function registerIpcHandlers() {
     return await activationRepository.generateOtpForEmployee(requestId, employeeId)
   })
 
-  // Dialog IPCs
+  // Dialog & Shell IPCs
   ipcMain.handle('dialog:showSaveDialog', async (_, options: any) => {
     const { dialog } = await import('electron')
     return await dialog.showSaveDialog(options)
+  })
+
+  ipcMain.handle('shell:openPath', async (_, relativeOrAbsolutePath: string) => {
+    const { shell } = await import('electron')
+    let fullPath = relativeOrAbsolutePath
+    if (!path.isAbsolute(fullPath)) {
+      fullPath = path.join(getPermanentStorageDir(), relativeOrAbsolutePath)
+    }
+    if (fs.existsSync(fullPath)) {
+      await shell.openPath(fullPath)
+      return { success: true }
+    } else {
+      return { success: false, message: 'الملف غير موجود على القرص المحلي.' }
+    }
   })
 
   // Reports, Settlement & Month Close Handlers

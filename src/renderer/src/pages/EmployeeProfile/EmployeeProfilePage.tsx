@@ -7,6 +7,7 @@ import { useLedgerStore } from '../../stores/useLedgerStore'
 import { DepositModal } from '../../components/common/DepositModal'
 import { QRModal } from '../../components/common/QRModal'
 import { CopyableOpNo } from '../../components/common/CopyableOpNo'
+import { AttachmentModal } from '../../components/common/AttachmentModal'
 
 export const EmployeeProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
@@ -17,6 +18,7 @@ export const EmployeeProfilePage: React.FC = () => {
 
   const [isDepositOpen, setIsDepositOpen] = useState(false)
   const [selectedOpNo, setSelectedOpNo] = useState<string | null>(null)
+  const [activeAttachments, setActiveAttachments] = useState<any[] | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -186,9 +188,22 @@ export const EmployeeProfilePage: React.FC = () => {
                       </button>
 
                       {item.attachments && item.attachments.length > 0 && (
-                        <span style={{ fontSize: '11px', color: 'var(--accent-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <FaPaperclip /> {item.attachments.length} مرفق
-                        </span>
+                        <button
+                          onClick={() => setActiveAttachments(item.attachments)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '11px',
+                            color: 'var(--accent-success)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          <FaPaperclip /> {item.attachments.length} مرفق (عرض/فتح)
+                        </button>
                       )}
                     </div>
                   </div>
@@ -213,6 +228,7 @@ export const EmployeeProfilePage: React.FC = () => {
 
       <DepositModal isOpen={isDepositOpen} onClose={() => setIsDepositOpen(false)} />
       <QRModal isOpen={!!selectedOpNo} operationNo={selectedOpNo} onClose={() => setSelectedOpNo(null)} />
+      <AttachmentModal isOpen={!!activeAttachments} attachments={activeAttachments || []} onClose={() => setActiveAttachments(null)} />
     </motion.div>
   )
 }

@@ -11,6 +11,7 @@ export const SettingsPage: React.FC = () => {
   const [autoBackup, setAutoBackup] = useState(true)
   const [backups, setBackups] = useState<any[]>([])
   const [backupMsg, setBackupMsg] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
 
   const loadBackups = async () => {
     try {
@@ -29,24 +30,29 @@ export const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     if (settings) {
-      if (settings.companyName) setCompanyName(settings.companyName)
-      if (settings.telegramBotToken) setBotToken(settings.telegramBotToken)
+      if (settings.companyName && !companyName) setCompanyName(settings.companyName)
+      if (settings.telegramBotToken && !botToken) setBotToken(settings.telegramBotToken)
       setAutoBackup(settings.autoBackupEnabled ?? true)
     }
   }, [settings])
 
   const handleSaveBranding = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!companyName.trim()) {
+      alert('⚠️ يرجى إدخال اسم الشركة.')
+      return
+    }
     const cleanedToken = botToken.trim().replace(/^bot/i, '').replace(/["'\s]/g, '')
     await updateSettings({
-      companyName,
+      companyName: companyName.trim(),
       telegramBotToken: cleanedToken,
       autoBackupEnabled: autoBackup
     })
     if (cleanedToken) {
       await connectBot(cleanedToken)
     }
-    alert('✅ تم حفظ الإعدادات وتحديث البوت بنجاح!')
+    setSaveSuccess(true)
+    setTimeout(() => setSaveSuccess(false), 4000)
   }
 
   const handleConnectBot = async () => {
@@ -69,10 +75,12 @@ export const SettingsPage: React.FC = () => {
   }
 
   const handleRestoreBackup = async (fileName: string) => {
-    if (confirm(`هل أنت محقق من استعادة النسخة الاحتياطية (${fileName})؟ سيتم استبدال البيانات الحالية.`)) {
+    if (confirm(`هل أنت تأكد من استعادة النسخة الاحتياطية (${fileName})؟ سيتم دمج ومزامنة البيانات مع قاعدة البيانات السحابية.`)) {
       try {
         await window.electronAPI.restoreBackup(fileName)
-        alert('✅ تم استعادة قاعدة البيانات بنجاح! يرجى إعادة تشغيل البرنامج.')
+        alert('✅ تم استعادة ومزامنة قاعدة البيانات بنجاح!')
+        await fetchSettings()
+        await loadBackups()
       } catch (err: any) {
         alert(err.message || 'حدث خطأ أثناء الاستعادة.')
       }
@@ -83,9 +91,9 @@ export const SettingsPage: React.FC = () => {
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       <div className="top-header">
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '800' }}>إعدادات النظام والنسخ الاحتياطي</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: '800' }}>إعدادات النظام والنسخ الاحتياطي السحابي</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-            ربط بوت التليجرام، إعدادات اسم الشركة والنسخ الاحتياطي التلقائي لقاعدة البيانات
+            ربط بوت التليجرام، إعدادات اسم الشركة والنسخ الاحتياطي التلقائي لقاعدة البيانات السحابية
           </p>
         </div>
       </div>
@@ -93,6 +101,38 @@ export const SettingsPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
         {/* Left Panel: Telegram Bot Config & Branding */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Company Branding */}
+          <div className="card">
+            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaCog color="var(--accent-brand)" /> بيانات الهوية والشركة
+            </h3>
+
+            <form onSubmit={handleSaveBranding}>
+              <div className="form-group">
+                <label className="form-label">اسم الشركة / المؤسسة:</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="مثال: شركة العهد المالية"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+                {saveSuccess && (
+                  <span className="badge badge-active">
+                    <FaCheckCircle size={12} /> تم حفظ الإعدادات بنجاح!
+                  </span>
+                )}
+                <button type="submit" className="btn btn-success" style={{ marginRight: 'auto' }}>
+                  حفظ التعديلات 💾
+                </button>
+              </div>
+            </form>
+          </div>
+
           {/* Telegram Bot Setup */}
           <div className="card">
             <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -133,44 +173,18 @@ export const SettingsPage: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {/* Company Branding */}
-          <div className="card">
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FaCog color="var(--accent-brand)" /> بيانات الهوية والشركة
-            </h3>
-
-            <form onSubmit={handleSaveBranding}>
-              <div className="form-group">
-                <label className="form-label">اسم الشركة / المؤسسة:</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                <button type="submit" className="btn btn-success">
-                  حفظ البيانات 💾
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
 
         {/* Right Panel: Auto & Manual Backups */}
         <div className="card">
           <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FaDatabase color="var(--accent-success)" /> النسخ الاحتياطي والاستعادة (SQLite Backups)
+            <FaDatabase color="var(--accent-success)" /> النسخ الاحتياطي والاستعادة السحابية
           </h3>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
               <strong style={{ fontSize: '14px' }}>النسخ الاحتياطي التلقائي اليومي</strong>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>توليد نسخة تلقائية كل 24 ساعة في مجلد storage/backups</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>توليد نسخة احتياطية سحابية تلقائية كل 24 ساعة</p>
             </div>
 
             <input
@@ -216,7 +230,7 @@ export const SettingsPage: React.FC = () => {
                   </div>
 
                   <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '11px' }} onClick={() => handleRestoreBackup(b.fileName)}>
-                    <FaUndo /> استعادة
+                    <FaUndo /> استعادة ومزامنة
                   </button>
                 </div>
               ))

@@ -4,11 +4,13 @@ import { FaExchangeAlt, FaQrcode, FaPaperclip, FaFilter } from 'react-icons/fa'
 import { useLedgerStore } from '../../stores/useLedgerStore'
 import { QRModal } from '../../components/common/QRModal'
 import { CopyableOpNo } from '../../components/common/CopyableOpNo'
+import { AttachmentModal } from '../../components/common/AttachmentModal'
 
 export const LedgerPage: React.FC = () => {
   const { entries, totalEntries, page, totalPages, loading, fetchEntries } = useLedgerStore()
   const [filterType, setFilterType] = useState<string>('')
   const [selectedOpNo, setSelectedOpNo] = useState<string | null>(null)
+  const [activeAttachments, setActiveAttachments] = useState<any[] | null>(null)
 
   useEffect(() => {
     fetchEntries({ type: filterType || undefined })
@@ -117,9 +119,24 @@ export const LedgerPage: React.FC = () => {
                       <td style={{ padding: '14px' }}>
                         <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{entry.createdBy}</div>
                         {attCount > 0 && (
-                          <span style={{ fontSize: '11px', color: 'var(--accent-brand)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                            <FaPaperclip size={10} /> {attCount} مرفق
-                          </span>
+                          <button
+                            onClick={() => setActiveAttachments(entry.attachments)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              fontSize: '11px',
+                              color: 'var(--accent-brand)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              marginTop: '4px',
+                              cursor: 'pointer',
+                              fontWeight: 'bold'
+                            }}
+                            title="اضغط لعرض المرفقات وفتح الملفات"
+                          >
+                            <FaPaperclip size={10} /> {attCount} مرفق (فتح)
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -132,6 +149,7 @@ export const LedgerPage: React.FC = () => {
       </div>
 
       <QRModal isOpen={!!selectedOpNo} operationNo={selectedOpNo} onClose={() => setSelectedOpNo(null)} />
+      <AttachmentModal isOpen={!!activeAttachments} attachments={activeAttachments || []} onClose={() => setActiveAttachments(null)} />
     </motion.div>
   )
 }
