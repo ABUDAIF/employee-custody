@@ -153,70 +153,74 @@ export class TelegramBotService {
           return
         }
 
-        if (text.includes('رصيدي')) {
-          this.userSessions.delete(telegramId)
-          const metrics = await employeeRepository.calculateEmployeeMetrics(employee.id)
-          await this.bot?.sendMessage(
-            chatId,
-            `📊 **بيان رصيدك الحالي:**\n\n` +
-              `👤 **الموظف:** ${employee.name}\n` +
-              `💼 **الوظيفة:** ${employee.jobTitle}\n` +
-              `----------------------------------\n` +
-              `📥 **إجمالي العهد:** ${metrics.totalCustody.toLocaleString('ar-EG')} ج.م\n` +
-              `📤 **إجمالي المصروفات:** ${metrics.totalExpenses.toLocaleString('ar-EG')} ج.م\n` +
-              `💰 **الرصيد المتبقي:** *${metrics.balance.toLocaleString('ar-EG')} ج.م*`,
-            { parse_mode: 'Markdown', ...this.mainKeyboard }
-          )
-          return
-        }
+        const isExplicitMenu = ['💰 رصيدي', '➕ إضافة مصروف', '📄 آخر العمليات', '☎️ تواصل مع الحسابات', 'إضافة مصروف'].some(m => text.includes(m))
 
-        if (text.includes('العمليات')) {
-          this.userSessions.delete(telegramId)
-          const timeline = await ledgerRepository.getEmployeeTimeline(employee.id)
-          const recent = timeline.slice(0, 5)
-
-          if (recent.length === 0) {
-            await this.bot?.sendMessage(chatId, 'لا توجد حركات تسليمه أو مصروفات مسجلة بعد.', this.mainKeyboard)
+        if (session.step === 'IDLE' || isExplicitMenu) {
+          if (text.includes('رصيدي')) {
+            this.userSessions.delete(telegramId)
+            const metrics = await employeeRepository.calculateEmployeeMetrics(employee.id)
+            await this.bot?.sendMessage(
+              chatId,
+              `📊 **بيان رصيدك الحالي:**\n\n` +
+                `👤 **الموظف:** ${employee.name}\n` +
+                `💼 **الوظيفة:** ${employee.jobTitle}\n` +
+                `----------------------------------\n` +
+                `📥 **إجمالي العهد:** ${metrics.totalCustody.toLocaleString('ar-EG')} ج.م\n` +
+                `📤 **إجمالي المصروفات:** ${metrics.totalExpenses.toLocaleString('ar-EG')} ج.م\n` +
+                `💰 **الرصيد المتبقي:** *${metrics.balance.toLocaleString('ar-EG')} ج.م*`,
+              { parse_mode: 'Markdown', ...this.mainKeyboard }
+            )
             return
           }
 
-          let report = `📄 **آخر 5 حركات مسجلة:**\n\n`
-          for (const item of recent) {
-            const typeIcon = item.type === 'DEPOSIT' ? '⬆️' : '⬇️'
-            const sign = item.type === 'DEPOSIT' ? '+' : '-'
-            const dateStr = new Date(item.date).toLocaleDateString('ar-EG')
-            report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category}\n`
-            report += `📝 ${item.description}\n`
-            report += `🔢 #${item.operationNo} (${dateStr})\n`
-            report += `----------------------------------\n`
+          if (text.includes('العمليات')) {
+            this.userSessions.delete(telegramId)
+            const timeline = await ledgerRepository.getEmployeeTimeline(employee.id)
+            const recent = timeline.slice(0, 5)
+
+            if (recent.length === 0) {
+              await this.bot?.sendMessage(chatId, 'لا توجد حركات تسليمه أو مصروفات مسجلة بعد.', this.mainKeyboard)
+              return
+            }
+
+            let report = `📄 **آخر 5 حركات مسجلة:**\n\n`
+            for (const item of recent) {
+              const typeIcon = item.type === 'DEPOSIT' ? '⬆️' : '⬇️'
+              const sign = item.type === 'DEPOSIT' ? '+' : '-'
+              const dateStr = new Date(item.date).toLocaleDateString('ar-EG')
+              report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category}\n`
+              report += `📝 ${item.description}\n`
+              report += `🔢 #${item.operationNo} (${dateStr})\n`
+              report += `----------------------------------\n`
+            }
+
+            await this.bot?.sendMessage(chatId, report, { parse_mode: 'Markdown', ...this.mainKeyboard })
+            return
           }
 
-          await this.bot?.sendMessage(chatId, report, { parse_mode: 'Markdown', ...this.mainKeyboard })
-          return
-        }
+          if (text.includes('الحسابات')) {
+            this.userSessions.delete(telegramId)
+            const settings = await settingsRepository.getSettings()
+            await this.bot?.sendMessage(
+              chatId,
+              `🏢 **${settings.companyName}**\n\n` +
+                `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
+                `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
+              { parse_mode: 'Markdown', ...this.mainKeyboard }
+            )
+            return
+          }
 
-        if (text.includes('الحسابات')) {
-          this.userSessions.delete(telegramId)
-          const settings = await settingsRepository.getSettings()
-          await this.bot?.sendMessage(
-            chatId,
-            `🏢 **${settings.companyName}**\n\n` +
-              `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
-              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
-            { parse_mode: 'Markdown', ...this.mainKeyboard }
-          )
-          return
-        }
-
-        if (text.includes('إضافة مصروف') || text.includes('مصروف')) {
-          this.userSessions.set(telegramId, { step: 'AWAITING_AMOUNT' })
-          await this.bot?.sendMessage(chatId, '💳 **أدخل قيمة المصروف بالجنيه:**\n(مثال: 150)', {
-            reply_markup: {
-              keyboard: [[{ text: 'إلغاء' }]],
-              resize_keyboard: true
-            }
-          })
-          return
+          if (text.includes('مصروف')) {
+            this.userSessions.set(telegramId, { step: 'AWAITING_AMOUNT' })
+            await this.bot?.sendMessage(chatId, '💳 **أدخل قيمة المصروف بالجنيه:**\n(مثال: 150)', {
+              reply_markup: {
+                keyboard: [[{ text: 'إلغاء' }]],
+                resize_keyboard: true
+              }
+            })
+            return
+          }
         }
 
         switch (session.step) {

@@ -102,88 +102,95 @@ async function startBot() {
       const employee = existingEmployee
       let session = userSessions.get(telegramId) || { step: 'IDLE' }
 
+      // 1. Check for cancel at any point
       if (text.includes('إلغاء') || text === '/cancel') {
         userSessions.delete(telegramId)
         await bot.sendMessage(chatId, 'تم إلغاء العملية.', mainKeyboard)
         return
       }
 
-      if (text.includes('رصيدي')) {
-        userSessions.delete(telegramId)
-        const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
-        let custody = 0, expenses = 0
-        for (const e of entries) {
-          if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
-          else if (e.type === 'EXPENSE') expenses += e.amount
-        }
-        const balance = custody - expenses
+      // 2. Main menu triggers (ONLY when IDLE or explicit menu click)
+      const isExplicitMenu = ['💰 رصيدي', '➕ إضافة مصروف', '📄 آخر العمليات', '☎️ تواصل مع الحسابات', 'إضافة مصروف'].some(m => text.includes(m))
 
-        await bot.sendMessage(
-          chatId,
-          `📊 **بيان رصيدك الحالي:**\n\n` +
-            `👤 **الموظف:** ${employee.name}\n` +
-            `💼 **الوظيفة:** ${employee.jobTitle}\n` +
-            `----------------------------------\n` +
-            `📥 **إجمالي العهد:** ${custody.toLocaleString('ar-EG')} ج.م\n` +
-            `📤 **إجمالي المصروفات:** ${expenses.toLocaleString('ar-EG')} ج.م\n` +
-            `💰 **الرصيد المتبقي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
-          { parse_mode: 'Markdown', ...mainKeyboard }
-        )
-        return
-      }
+      if (session.step === 'IDLE' || isExplicitMenu) {
+        if (text.includes('رصيدي')) {
+          userSessions.delete(telegramId)
+          const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
+          let custody = 0, expenses = 0
+          for (const e of entries) {
+            if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
+            else if (e.type === 'EXPENSE') expenses += e.amount
+          }
+          const balance = custody - expenses
 
-      if (text.includes('العمليات')) {
-        userSessions.delete(telegramId)
-        const recent = await prisma.ledgerEntry.findMany({
-          where: { employeeId: employee.id },
-          orderBy: { date: 'desc' },
-          take: 5
-        })
-
-        if (recent.length === 0) {
-          await bot.sendMessage(chatId, 'لا توجد حركات تسليمه أو مصروفات مسجلة بعد.', mainKeyboard)
+          await bot.sendMessage(
+            chatId,
+            `📊 **بيان رصيدك الحالي:**\n\n` +
+              `👤 **الموظف:** ${employee.name}\n` +
+              `💼 **الوظيفة:** ${employee.jobTitle}\n` +
+              `----------------------------------\n` +
+              `📥 **إجمالي العهد:** ${custody.toLocaleString('ar-EG')} ج.م\n` +
+              `📤 **إجمالي المصروفات:** ${expenses.toLocaleString('ar-EG')} ج.م\n` +
+              `💰 **الرصيد المتبقي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
+            { parse_mode: 'Markdown', ...mainKeyboard }
+          )
           return
         }
 
-        let report = `📄 **آخر 5 حركات مسجلة:**\n\n`
-        for (const item of recent) {
-          const typeIcon = item.type === 'DEPOSIT' ? '⬆️' : '⬇️'
-          const sign = item.type === 'DEPOSIT' ? '+' : '-'
-          const dateStr = new Date(item.date).toLocaleDateString('ar-EG')
-          report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category}\n`
-          report += `📝 ${item.description}\n`
-          report += `🔢 #${item.operationNo} (${dateStr})\n`
-          report += `----------------------------------\n`
+        if (text.includes('العمليات')) {
+          userSessions.delete(telegramId)
+          const recent = await prisma.ledgerEntry.findMany({
+            where: { employeeId: employee.id },
+            orderBy: { date: 'desc' },
+            take: 5
+          })
+
+          if (recent.length === 0) {
+            await bot.sendMessage(chatId, 'لا توجد حركات تسليمه أو مصروفات مسجلة بعد.', mainKeyboard)
+            return
+          }
+
+          let report = `📄 **آخر 5 حركات مسجلة:**\n\n`
+          for (const item of recent) {
+            const typeIcon = item.type === 'DEPOSIT' ? '⬆️' : '⬇️'
+            const sign = item.type === 'DEPOSIT' ? '+' : '-'
+            const dateStr = new Date(item.date).toLocaleDateString('ar-EG')
+            report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category}\n`
+            report += `📝 ${item.description}\n`
+            report += `🔢 #${item.operationNo} (${dateStr})\n`
+            report += `----------------------------------\n`
+          }
+
+          await bot.sendMessage(chatId, report, { parse_mode: 'Markdown', ...mainKeyboard })
+          return
         }
 
-        await bot.sendMessage(chatId, report, { parse_mode: 'Markdown', ...mainKeyboard })
-        return
+        if (text.includes('الحسابات')) {
+          userSessions.delete(telegramId)
+          const currentSettings = await prisma.settings.findFirst()
+          await bot.sendMessage(
+            chatId,
+            `🏢 **${currentSettings?.companyName || 'شركة العهد المالية'}**\n\n` +
+              `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
+              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
+            { parse_mode: 'Markdown', ...mainKeyboard }
+          )
+          return
+        }
+
+        if (text.includes('مصروف')) {
+          userSessions.set(telegramId, { step: 'AWAITING_AMOUNT' })
+          await bot.sendMessage(chatId, '💳 **أدخل قيمة المصروف بالجنيه:**\n(مثال: 150)', {
+            reply_markup: {
+              keyboard: [[{ text: 'إلغاء' }]],
+              resize_keyboard: true
+            }
+          })
+          return
+        }
       }
 
-      if (text.includes('الحسابات')) {
-        userSessions.delete(telegramId)
-        const currentSettings = await prisma.settings.findFirst()
-        await bot.sendMessage(
-          chatId,
-          `🏢 **${currentSettings?.companyName || 'شركة العهد المالية'}**\n\n` +
-            `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
-            `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
-          { parse_mode: 'Markdown', ...mainKeyboard }
-        )
-        return
-      }
-
-      if (text.includes('إضافة مصروف') || text.includes('مصروف')) {
-        userSessions.set(telegramId, { step: 'AWAITING_AMOUNT' })
-        await bot.sendMessage(chatId, '💳 **أدخل قيمة المصروف بالجنيه:**\n(مثال: 150)', {
-          reply_markup: {
-            keyboard: [[{ text: 'إلغاء' }]],
-            resize_keyboard: true
-          }
-        })
-        return
-      }
-
+      // 3. Conversational State Machine for Active Sessions
       switch (session.step) {
         case 'AWAITING_AMOUNT': {
           const num = parseFloat(text)
