@@ -25,7 +25,7 @@ const userSessions = new Map()
 
 async function startBot() {
   const settings = await prisma.settings.findFirst()
-  const token = (process.env.TELEGRAM_BOT_TOKEN || settings?.telegramBotToken || '').trim()
+  const token = (process.env.TELEGRAM_BOT_TOKEN || settings?.telegramBotToken || '').trim().replace(/^bot/i, '').replace(/["'\s]/g, '')
 
   if (!token) {
     console.error("❌ No Telegram Bot Token configured. Waiting for token in DB/Env...")
@@ -59,7 +59,7 @@ async function startBot() {
           })
 
           if (!req || !req.employeeId) {
-            await bot.sendMessage(chatId, '❌ كود التفعيل غير صحيح أو غير موجود.')
+            await bot.sendMessage(chatId, '❌ كود التفعيل غير صحيح أو انتهت صلاحيته.')
             return
           }
 
@@ -102,15 +102,13 @@ async function startBot() {
       const employee = existingEmployee
       let session = userSessions.get(telegramId) || { step: 'IDLE' }
 
-      // 1. Check for cancel at any point
       if (text.includes('إلغاء') || text === '/cancel') {
         userSessions.delete(telegramId)
         await bot.sendMessage(chatId, 'تم إلغاء العملية.', mainKeyboard)
         return
       }
 
-      // 2. Main menu triggers (ONLY when IDLE or explicit menu click)
-      const isExplicitMenu = ['💰 رصيدي', '➕ إضافة مصروف', '📄 آخر العمليات', '☎️ تواصل مع الحسابات', 'إضافة مصروف'].some(m => text.includes(m))
+      const isExplicitMenu = ['💰 رصيدي', '➕ إضافة مصروف', '📄 آخر العمليات', '☎️ تواصل مع الحسابات', 'إضافة مصروف', 'رصيدي'].some(m => text === m || text.includes(m))
 
       if (session.step === 'IDLE' || isExplicitMenu) {
         if (text.includes('رصيدي')) {
@@ -146,7 +144,7 @@ async function startBot() {
           })
 
           if (recent.length === 0) {
-            await bot.sendMessage(chatId, 'لا توجد حركات تسليمه أو مصروفات مسجلة بعد.', mainKeyboard)
+            await bot.sendMessage(chatId, 'لا توجد حركات عهدة أو مصروفات مسجلة بعد.', mainKeyboard)
             return
           }
 
@@ -155,7 +153,7 @@ async function startBot() {
             const typeIcon = item.type === 'DEPOSIT' ? '⬆️' : '⬇️'
             const sign = item.type === 'DEPOSIT' ? '+' : '-'
             const dateStr = new Date(item.date).toLocaleDateString('ar-EG')
-            report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category}\n`
+            report += `${typeIcon} *${sign}${item.amount} ج.م* | ${item.category || 'عام'}\n`
             report += `📝 ${item.description}\n`
             report += `🔢 #${item.operationNo} (${dateStr})\n`
             report += `----------------------------------\n`
@@ -190,12 +188,12 @@ async function startBot() {
         }
       }
 
-      // 3. Conversational State Machine for Active Sessions
       switch (session.step) {
         case 'AWAITING_AMOUNT': {
-          const num = parseFloat(text)
+          const cleanNum = text.replace(/[^0-9.]/g, '')
+          const num = parseFloat(cleanNum)
           if (isNaN(num) || num <= 0) {
-            await bot.sendMessage(chatId, '❌ يرجى إدخال مبلغ صحيح (رقم أكبر من 0):')
+            await bot.sendMessage(chatId, '❌ يرجى إدخال مبلغ صحيح (رقم أكبر من 0):\nمثال: 150')
             return
           }
           session.amount = num

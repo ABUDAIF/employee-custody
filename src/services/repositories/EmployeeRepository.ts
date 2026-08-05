@@ -12,73 +12,84 @@ export interface EmployeeWithMetrics extends Employee {
 
 export class EmployeeRepository {
   public async calculateEmployeeMetrics(employeeId: string) {
-    const agg = await prisma.ledgerEntry.groupBy({
-      by: ['type'],
-      where: { employeeId },
-      _sum: { amount: true },
-      _count: { _all: true }
-    })
+    try {
+      const entries = await prisma.ledgerEntry.findMany({
+        where: { employeeId },
+        orderBy: { date: 'desc' },
+        select: { type: true, amount: true, date: true }
+      })
 
-    let totalCustody = 0
-    let totalExpenses = 0
-    let transactionCount = 0
+      let totalCustody = 0
+      let totalExpenses = 0
+      let transactionCount = entries.length
+      let lastTransactionDate: Date | null = entries.length > 0 ? entries[0].date : null
 
-    for (const group of agg) {
-      transactionCount += group._count._all
-      const sum = group._sum.amount || 0
-      if (group.type === 'DEPOSIT' || group.type === 'OPENING_BALANCE') {
-        totalCustody += sum
-      } else if (group.type === 'EXPENSE') {
-        totalExpenses += sum
-      } else if (group.type === 'ADJUSTMENT') {
-        totalCustody += sum
+      for (const entry of entries) {
+        if (entry.type === 'DEPOSIT' || entry.type === 'OPENING_BALANCE' || entry.type === 'ADJUSTMENT') {
+          totalCustody += entry.amount
+        } else if (entry.type === 'EXPENSE') {
+          totalExpenses += entry.amount
+        }
       }
-    }
 
-    const lastTx = await prisma.ledgerEntry.findFirst({
-      where: { employeeId },
-      orderBy: { date: 'desc' },
-      select: { date: true }
-    })
+      const balance = totalCustody - totalExpenses
 
-    const balance = totalCustody - totalExpenses
-
-    return {
-      balance,
-      totalCustody,
-      totalExpenses,
-      transactionCount,
-      lastTransactionDate: lastTx ? lastTx.date : null
+      return {
+        balance,
+        totalCustody,
+        totalExpenses,
+        transactionCount,
+        lastTransactionDate
+      }
+    } catch (err) {
+      console.error(`Failed to calculate metrics for employee ${employeeId}:`, err)
+      return {
+        balance: 0,
+        totalCustody: 0,
+        totalExpenses: 0,
+        transactionCount: 0,
+        lastTransactionDate: null
+      }
     }
   }
 
   public async getAllEmployees(): Promise<EmployeeWithMetrics[]> {
-    const employees = await prisma.employee.findMany({
-      orderBy: { createdAt: 'desc' }
-    })
-
-    const result: EmployeeWithMetrics[] = []
-    for (const emp of employees) {
-      const metrics = await this.calculateEmployeeMetrics(emp.id)
-      result.push({
-        ...emp,
-        ...metrics
+    try {
+      const employees = await prisma.employee.findMany({
+        orderBy: { createdAt: 'desc' }
       })
+
+      const result: EmployeeWithMetrics[] = []
+      for (const emp of employees) {
+        const metrics = await this.calculateEmployeeMetrics(emp.id)
+        result.push({
+          ...emp,
+          ...metrics
+        })
+      }
+      return result
+    } catch (err) {
+      console.error('Failed to get all employees:', err)
+      return []
     }
-    return result
   }
 
   public async getEmployeeById(id: string): Promise<EmployeeWithMetrics | null> {
-    const emp = await prisma.employee.findUnique({
-      where: { id }
-    })
+    try {
+      const emp = await prisma.employee.findUnique({
+        where: { id }
+      })
 
-    if (!emp) return null
+      if (!emp) return null
 
-    const metrics = await this.calculateEmployeeMetrics(emp.id)
-    return {
-      ...emp,
-      ...metrics
+      const metrics = await this.calculateEmployeeMetrics(emp.id)
+      return {
+        ...emp,
+        ...metrics
+      }
+    } catch (err) {
+      console.error(`Failed to get employee ${id}:`, err)
+      return null
     }
   }
 
