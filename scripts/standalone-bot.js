@@ -1,6 +1,8 @@
 // Standalone Cloud Telegram Bot Worker for Railway / Render (Runs 24/7)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
+const path = require('path')
+const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 
@@ -231,52 +233,72 @@ async function startBot() {
 
         case 'AWAITING_DESCRIPTION': {
           session.description = text
+          session.step = 'AWAITING_ATTACHMENT_PROMPT'
+          userSessions.set(telegramId, session)
 
-          const today = new Date()
-          const yyyy = today.getFullYear()
-          const mm = String(today.getMonth() + 1).padStart(2, '0')
-          const dd = String(today.getDate()).padStart(2, '0')
-          const datePrefix = `${yyyy}${mm}${dd}`
-
-          const countToday = await prisma.ledgerEntry.count({
-            where: { operationNo: { startsWith: datePrefix } }
-          })
-          const sequence = String(countToday + 1).padStart(6, '0')
-          const operationNo = `${datePrefix}${sequence}`
-
-          const entry = await prisma.ledgerEntry.create({
-            data: {
-              operationNo,
-              employeeId: employee.id,
-              type: 'EXPENSE',
-              amount: session.amount,
-              category: session.category,
-              description: text,
-              createdBy: `${employee.name} (تليجرام السحابي)`
+          await bot.sendMessage(chatId, `📎 **هل تريد إرفاق صورة فاتورة أو مستند PDF؟**`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              keyboard: [[{ text: 'نعم 📎' }, { text: 'لا (حفظ مباشرة) 🚀' }], [{ text: 'إلغاء' }]],
+              resize_keyboard: true
             }
           })
+          break
+        }
 
-          userSessions.delete(telegramId)
-
-          const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
-          let custody = 0, expenses = 0
-          for (const e of entries) {
-            if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
-            else if (e.type === 'EXPENSE') expenses += e.amount
+        case 'AWAITING_ATTACHMENT_PROMPT': {
+          if (text.includes('نعم')) {
+            session.step = 'AWAITING_ATTACHMENT'
+            userSessions.set(telegramId, session)
+            await bot.sendMessage(chatId, '📷 يرجى إرسال **صورة الفاتورة** أو **ملف PDF** الآن:', {
+              reply_markup: {
+                keyboard: [[{ text: 'إلغاء' }]],
+                resize_keyboard: true
+              }
+            })
+          } else {
+            await finalizeExpense(bot, chatId, telegramId, employee, session)
           }
-          const balance = custody - expenses
+          break
+        }
 
-          await bot.sendMessage(
-            chatId,
-            `✅ **تم تسجيل المصروف بنجاح!**\n\n` +
-              `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
-              `💰 **المبلغ:** ${entry.amount} ج.م\n` +
-              `🏷️ **الفئة:** ${entry.category}\n` +
-              `📝 **الوصف:** ${entry.description}\n` +
-              `----------------------------------\n` +
-              `💵 **رصيدك الحالي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
-            { parse_mode: 'Markdown', ...mainKeyboard }
-          )
+        case 'AWAITING_ATTACHMENT': {
+          let fileId = null
+          let fileName = `receipt_${Date.now()}`
+          let fileType = 'image/jpeg'
+
+          if (msg.photo && msg.photo.length > 0) {
+            const largest = msg.photo[msg.photo.length - 1]
+            fileId = largest.file_id
+            fileName += '.jpg'
+            fileType = 'image/jpeg'
+          } else if (msg.document) {
+            fileId = msg.document.file_id
+            fileName = msg.document.file_name || `${fileName}.pdf`
+            fileType = msg.document.mime_type || 'application/pdf'
+          }
+
+          if (fileId) {
+            try {
+              const fileStream = bot.getFileStream(fileId)
+              const chunks = []
+              for await (const chunk of fileStream) {
+                chunks.push(chunk)
+              }
+              const buffer = Buffer.concat(chunks)
+
+              session.attachments = session.attachments || []
+              session.attachments.push({ fileName, buffer, fileType })
+
+              await finalizeExpense(bot, chatId, telegramId, employee, session)
+            } catch (err) {
+              console.error('Failed to download file stream:', err)
+              await bot.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحميل الفاتورة، سيتم حفظ المصروف بدون الصورة.')
+              await finalizeExpense(bot, chatId, telegramId, employee, session)
+            }
+          } else {
+            await bot.sendMessage(chatId, '❌ لم نتمكن من التعرف على الصورة/الملف. يرجى إرسال صورة أو ملف PDF أو اضغط إلغاء.')
+          }
           break
         }
 
@@ -289,6 +311,85 @@ async function startBot() {
       console.error('Standalone Bot Message Error:', err)
     }
   })
+}
+
+async function finalizeExpense(bot, chatId, telegramId, employee, session) {
+  try {
+    const today = new Date()
+    const yyyy = today.getFullYear()
+    const mm = String(today.getMonth() + 1).padStart(2, '0')
+    const dd = String(today.getDate()).padStart(2, '0')
+    const datePrefix = `${yyyy}${mm}${dd}`
+
+    const countToday = await prisma.ledgerEntry.count({
+      where: { operationNo: { startsWith: datePrefix } }
+    })
+    const sequence = String(countToday + 1).padStart(6, '0')
+    const operationNo = `${datePrefix}${sequence}`
+
+    const attachmentData = []
+    if (session.attachments && session.attachments.length > 0) {
+      let idx = 1
+      for (const att of session.attachments) {
+        const ext = att.fileName.split('.').pop() || 'bin'
+        const storedName = `${operationNo}_${idx}.${ext}`
+        const relPath = `receipts/${storedName}`
+
+        attachmentData.push({
+          fileName: att.fileName,
+          filePath: relPath,
+          fileType: att.fileType,
+          fileSize: att.buffer.length
+        })
+        idx++
+      }
+    }
+
+    const entry = await prisma.ledgerEntry.create({
+      data: {
+        operationNo,
+        employeeId: employee.id,
+        type: 'EXPENSE',
+        amount: session.amount,
+        category: session.category,
+        description: session.description,
+        createdBy: `${employee.name} (تليجرام السحابي)`,
+        attachments: {
+          create: attachmentData
+        }
+      },
+      include: {
+        attachments: true
+      }
+    })
+
+    userSessions.delete(telegramId)
+
+    const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
+    let custody = 0, expenses = 0
+    for (const e of entries) {
+      if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
+      else if (e.type === 'EXPENSE') expenses += e.amount
+    }
+    const balance = custody - expenses
+
+    await bot.sendMessage(
+      chatId,
+      `✅ **تم تسجيل المصروف بنجاح!**\n\n` +
+        `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
+        `💰 **المبلغ:** ${entry.amount} ج.م\n` +
+        `🏷️ **الفئة:** ${entry.category}\n` +
+        `📝 **الوصف:** ${entry.description}\n` +
+        (entry.attachments.length > 0 ? `📎 **المرفقات:** ${entry.attachments.length} ملف مرفق\n` : '') +
+        `----------------------------------\n` +
+        `💵 **رصيدك الحالي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
+      { parse_mode: 'Markdown', ...mainKeyboard }
+    )
+  } catch (err) {
+    console.error('Error finalizing expense:', err)
+    userSessions.delete(telegramId)
+    await bot.sendMessage(chatId, '❌ حدث خطأ أثناء حفظ العملية. يرجى المحاولة مرة أخرى.', mainKeyboard)
+  }
 }
 
 startBot()
