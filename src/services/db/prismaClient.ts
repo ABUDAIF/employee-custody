@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import path from 'path'
 import fs from 'fs'
 
-export const SUPABASE_URL = "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
+export const SUPABASE_URL = "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require"
 
 export function getPermanentStorageDir(): string {
   let baseDataDir: string

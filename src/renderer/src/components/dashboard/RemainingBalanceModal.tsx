@@ -5,21 +5,23 @@ import { useNavigate } from 'react-router-dom'
 interface RemainingBalanceModalProps {
   isOpen: boolean
   onClose: () => void
-  employees: any[]
+  employees?: any[]
 }
 
-export const RemainingBalanceModal: React.FC<RemainingBalanceModalProps> = ({ isOpen, onClose, employees }) => {
+export const RemainingBalanceModal: React.FC<RemainingBalanceModalProps> = ({ isOpen, onClose, employees = [] }) => {
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
 
   if (!isOpen) return null
 
-  const filtered = employees.filter((emp) =>
-    emp.name.toLowerCase().includes(search.toLowerCase()) ||
-    emp.jobTitle.toLowerCase().includes(search.toLowerCase())
+  const safeEmployees = Array.isArray(employees) ? employees : []
+
+  const filtered = safeEmployees.filter((emp) =>
+    (emp?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (emp?.jobTitle || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalAllRemaining = employees.reduce((sum, e) => sum + (e.balance || 0), 0)
+  const totalAllRemaining = safeEmployees.reduce((sum, e) => sum + (e.balance || 0), 0)
 
   return (
     <div className="modal-overlay" onClick={onClose}>

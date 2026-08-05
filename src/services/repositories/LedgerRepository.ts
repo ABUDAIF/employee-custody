@@ -16,22 +16,26 @@ export interface LedgerEntryWithDetails extends LedgerEntry {
 
 export class LedgerRepository {
   public async generateOperationNo(): Promise<string> {
-    const today = new Date()
-    const yyyy = today.getFullYear()
-    const mm = String(today.getMonth() + 1).padStart(2, '0')
-    const dd = String(today.getDate()).padStart(2, '0')
-    const datePrefix = `${yyyy}${mm}${dd}`
+    try {
+      const today = new Date()
+      const yyyy = today.getFullYear()
+      const mm = String(today.getMonth() + 1).padStart(2, '0')
+      const dd = String(today.getDate()).padStart(2, '0')
+      const datePrefix = `${yyyy}${mm}${dd}`
 
-    const countToday = await prisma.ledgerEntry.count({
-      where: {
-        operationNo: {
-          startsWith: datePrefix
+      const countToday = await prisma.ledgerEntry.count({
+        where: {
+          operationNo: {
+            startsWith: datePrefix
+          }
         }
-      }
-    })
+      })
 
-    const sequence = String(countToday + 1).padStart(6, '0')
-    return `${datePrefix}${sequence}`
+      const sequence = String(countToday + 1).padStart(6, '0')
+      return `${datePrefix}${sequence}`
+    } catch {
+      return `${Date.now()}`
+    }
   }
 
   public async createDeposit(data: {
@@ -138,16 +142,21 @@ export class LedgerRepository {
   }
 
   public async getEmployeeTimeline(employeeId: string): Promise<LedgerEntryWithDetails[]> {
-    return await prisma.ledgerEntry.findMany({
-      where: { employeeId },
-      orderBy: { date: 'desc' },
-      include: {
-        employee: {
-          select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
-        },
-        attachments: true
-      }
-    })
+    try {
+      return await prisma.ledgerEntry.findMany({
+        where: { employeeId },
+        orderBy: { date: 'desc' },
+        include: {
+          employee: {
+            select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+          },
+          attachments: true
+        }
+      })
+    } catch (err) {
+      console.error(`Failed to fetch timeline for employee ${employeeId}:`, err)
+      return []
+    }
   }
 
   public async getAllEntries(options?: {
@@ -158,40 +167,45 @@ export class LedgerRepository {
     startDate?: Date
     endDate?: Date
   }) {
-    const page = options?.page || 1
-    const limit = options?.limit || 50
-    const skip = (page - 1) * limit
+    try {
+      const page = options?.page || 1
+      const limit = options?.limit || 50
+      const skip = (page - 1) * limit
 
-    const where: any = {}
-    if (options?.type) where.type = options.type
-    if (options?.employeeId) where.employeeId = options.employeeId
-    if (options?.startDate || options?.endDate) {
-      where.date = {}
-      if (options?.startDate) where.date.gte = options.startDate
-      if (options?.endDate) where.date.lte = options.endDate
-    }
+      const where: any = {}
+      if (options?.type) where.type = options.type
+      if (options?.employeeId) where.employeeId = options.employeeId
+      if (options?.startDate || options?.endDate) {
+        where.date = {}
+        if (options?.startDate) where.date.gte = options.startDate
+        if (options?.endDate) where.date.lte = options.endDate
+      }
 
-    const [items, total] = await Promise.all([
-      prisma.ledgerEntry.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { date: 'desc' },
-        include: {
-          employee: {
-            select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
-          },
-          attachments: true
-        }
-      }),
-      prisma.ledgerEntry.count({ where })
-    ])
+      const [items, total] = await Promise.all([
+        prisma.ledgerEntry.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { date: 'desc' },
+          include: {
+            employee: {
+              select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+            },
+            attachments: true
+          }
+        }),
+        prisma.ledgerEntry.count({ where })
+      ])
 
-    return {
-      items,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit)
+      return {
+        items: items || [],
+        total: total || 0,
+        page,
+        totalPages: Math.ceil((total || 0) / limit) || 1
+      }
+    } catch (err) {
+      console.error('Failed to get all ledger entries:', err)
+      return { items: [], total: 0, page: 1, totalPages: 1 }
     }
   }
 
@@ -200,94 +214,112 @@ export class LedgerRepository {
       return { employees: [], ledgerEntries: [] }
     }
 
-    const q = query.trim()
-    const numericVal = parseFloat(q)
-    const isNum = !isNaN(numericVal)
+    try {
+      const q = query.trim()
+      const numericVal = parseFloat(q)
+      const isNum = !isNaN(numericVal)
 
-    const [employees, ledgerEntries] = await Promise.all([
-      prisma.employee.findMany({
-        where: {
-          OR: [
-            { name: { contains: q } },
-            { jobTitle: { contains: q } },
-            { phone: { contains: q } }
-          ]
-        },
-        take: 10
-      }),
-      prisma.ledgerEntry.findMany({
-        where: {
-          OR: [
-            { operationNo: { contains: q } },
-            { description: { contains: q } },
-            { category: { contains: q } },
-            { employee: { name: { contains: q } } },
-            ...(isNum ? [{ amount: { equals: numericVal } }] : []),
-            { attachments: { some: { fileName: { contains: q } } } }
-          ]
-        },
-        take: 30,
-        orderBy: { date: 'desc' },
-        include: {
-          employee: {
-            select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+      const [employees, ledgerEntries] = await Promise.all([
+        prisma.employee.findMany({
+          where: {
+            OR: [
+              { name: { contains: q } },
+              { jobTitle: { contains: q } },
+              { phone: { contains: q } }
+            ]
           },
-          attachments: true
-        }
-      })
-    ])
+          take: 10
+        }),
+        prisma.ledgerEntry.findMany({
+          where: {
+            OR: [
+              { operationNo: { contains: q } },
+              { description: { contains: q } },
+              { category: { contains: q } },
+              { employee: { name: { contains: q } } },
+              ...(isNum ? [{ amount: { equals: numericVal } }] : []),
+              { attachments: { some: { fileName: { contains: q } } } }
+            ]
+          },
+          take: 30,
+          orderBy: { date: 'desc' },
+          include: {
+            employee: {
+              select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+            },
+            attachments: true
+          }
+        })
+      ])
 
-    return { employees, ledgerEntries }
+      return { employees: employees || [], ledgerEntries: ledgerEntries || [] }
+    } catch (err) {
+      console.error('Global search error:', err)
+      return { employees: [], ledgerEntries: [] }
+    }
   }
 
   public async getDashboardMetrics() {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    try {
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
 
-    const [depositsAgg, expensesAgg, empCount, todayTxCount, monthTxCount, recentEntries] = await Promise.all([
-      prisma.ledgerEntry.aggregate({
-        where: {
-          OR: [{ type: 'DEPOSIT' }, { type: 'OPENING_BALANCE' }]
-        },
-        _sum: { amount: true }
-      }),
-      prisma.ledgerEntry.aggregate({
-        where: { type: 'EXPENSE' },
-        _sum: { amount: true }
-      }),
-      prisma.employee.count({ where: { status: 'ACTIVE' } }),
-      prisma.ledgerEntry.count({
-        where: { date: { gte: today } }
-      }),
-      prisma.ledgerEntry.count({
-        where: { date: { gte: firstDayOfMonth } }
-      }),
-      prisma.ledgerEntry.findMany({
-        take: 10,
-        orderBy: { date: 'desc' },
-        include: {
-          employee: {
-            select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+      const [depositsAgg, expensesAgg, empCount, todayTxCount, monthTxCount, recentEntries] = await Promise.all([
+        prisma.ledgerEntry.aggregate({
+          where: {
+            OR: [{ type: 'DEPOSIT' }, { type: 'OPENING_BALANCE' }]
           },
-          attachments: true
-        }
-      })
-    ])
+          _sum: { amount: true }
+        }),
+        prisma.ledgerEntry.aggregate({
+          where: { type: 'EXPENSE' },
+          _sum: { amount: true }
+        }),
+        prisma.employee.count({ where: { status: 'ACTIVE' } }),
+        prisma.ledgerEntry.count({
+          where: { date: { gte: today } }
+        }),
+        prisma.ledgerEntry.count({
+          where: { date: { gte: firstDayOfMonth } }
+        }),
+        prisma.ledgerEntry.findMany({
+          take: 10,
+          orderBy: { date: 'desc' },
+          include: {
+            employee: {
+              select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+            },
+            attachments: true
+          }
+        })
+      ])
 
-    const totalCustody = depositsAgg._sum.amount || 0
-    const totalExpenses = expensesAgg._sum.amount || 0
-    const remainingBalance = totalCustody - totalExpenses
+      const totalCustody = depositsAgg._sum.amount || 0
+      const totalExpenses = expensesAgg._sum.amount || 0
+      const remainingBalance = totalCustody - totalExpenses
 
-    return {
-      totalCustody,
-      totalExpenses,
-      remainingBalance,
-      employeeCount: empCount,
-      todayTxCount,
-      monthTxCount,
-      recentEntries
+      return {
+        totalCustody,
+        totalExpenses,
+        remainingBalance,
+        employeeCount: empCount || 0,
+        todayTxCount: todayTxCount || 0,
+        monthTxCount: monthTxCount || 0,
+        recentEntries: recentEntries || []
+      }
+    } catch (err) {
+      console.error('Failed to calculate dashboard metrics:', err)
+      return {
+        totalCustody: 0,
+        totalExpenses: 0,
+        remainingBalance: 0,
+        employeeCount: 0,
+        todayTxCount: 0,
+        monthTxCount: 0,
+        recentEntries: []
+      }
     }
   }
 }

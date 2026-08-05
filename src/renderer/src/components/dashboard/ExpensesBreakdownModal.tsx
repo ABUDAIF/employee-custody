@@ -5,10 +5,10 @@ import { CopyableOpNo } from '../common/CopyableOpNo'
 interface ExpensesBreakdownModalProps {
   isOpen: boolean
   onClose: () => void
-  employees: any[]
+  employees?: any[]
 }
 
-export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ isOpen, onClose, employees }) => {
+export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ isOpen, onClose, employees = [] }) => {
   const [entries, setEntries] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('ALL')
@@ -23,10 +23,12 @@ export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ 
   const loadExpenses = async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI.getLedgerEntries({ type: 'EXPENSE' })
-      setEntries(data)
+      const data = await window.electronAPI.getLedgerEntries({ type: 'EXPENSE', limit: 100000 })
+      const list = Array.isArray(data) ? data : (data?.items || [])
+      setEntries(list)
     } catch (err) {
       console.error('Failed to load expenses breakdown:', err)
+      setEntries([])
     } finally {
       setLoading(false)
     }
@@ -34,8 +36,10 @@ export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ 
 
   if (!isOpen) return null
 
-  // Filter entries by employee bubble filter + search query
-  const filtered = entries.filter((item) => {
+  const safeEntries = Array.isArray(entries) ? entries : []
+  const safeEmployees = Array.isArray(employees) ? employees : []
+
+  const filtered = safeEntries.filter((item) => {
     const matchesEmp = selectedEmployeeId === 'ALL' || item.employeeId === selectedEmployeeId
     const query = search.toLowerCase().trim()
     const matchesSearch =
@@ -47,7 +51,7 @@ export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ 
     return matchesEmp && matchesSearch
   })
 
-  const totalFilteredSum = filtered.reduce((sum, item) => sum + item.amount, 0)
+  const totalFilteredSum = filtered.reduce((sum, item) => sum + (item.amount || 0), 0)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -91,11 +95,11 @@ export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ 
                 transition: 'var(--transition-fast)'
               }}
             >
-              الكل ({entries.length})
+              الكل ({safeEntries.length})
             </button>
 
-            {employees.map((emp) => {
-              const count = entries.filter((e) => e.employeeId === emp.id).length
+            {safeEmployees.map((emp) => {
+              const count = safeEntries.filter((e) => e.employeeId === emp.id).length
               const isSelected = selectedEmployeeId === emp.id
               return (
                 <button
@@ -173,7 +177,7 @@ export const ExpensesBreakdownModal: React.FC<ExpensesBreakdownModalProps> = ({ 
                       <td style={{ padding: '10px', color: 'var(--accent-brand)' }}>{item.category || '-'}</td>
                       <td style={{ padding: '10px', maxWidth: '200px' }}>{item.description}</td>
                       <td style={{ padding: '10px', fontWeight: '800', color: 'var(--accent-danger)' }}>
-                        {item.amount.toLocaleString('ar-EG')} ج.م
+                        {(item.amount || 0).toLocaleString('ar-EG')} ج.م
                       </td>
                       <td style={{ padding: '10px' }}>
                         {item.attachments && item.attachments.length > 0 ? (

@@ -5,21 +5,23 @@ import { useNavigate } from 'react-router-dom'
 interface CustodyBreakdownModalProps {
   isOpen: boolean
   onClose: () => void
-  employees: any[]
+  employees?: any[]
 }
 
-export const CustodyBreakdownModal: React.FC<CustodyBreakdownModalProps> = ({ isOpen, onClose, employees }) => {
+export const CustodyBreakdownModal: React.FC<CustodyBreakdownModalProps> = ({ isOpen, onClose, employees = [] }) => {
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
 
   if (!isOpen) return null
 
-  const filtered = employees.filter((emp) =>
-    emp.name.toLowerCase().includes(search.toLowerCase()) ||
-    emp.jobTitle.toLowerCase().includes(search.toLowerCase())
+  const safeEmployees = Array.isArray(employees) ? employees : []
+
+  const filtered = safeEmployees.filter((emp) =>
+    (emp?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (emp?.jobTitle || '').toLowerCase().includes(search.toLowerCase())
   )
 
-  const totalAllCustody = employees.reduce((sum, e) => sum + (e.totalCustody || 0), 0)
+  const totalAllCustody = safeEmployees.reduce((sum, e) => sum + (e.totalCustody || 0), 0)
 
   return (
     <div className="modal-overlay" onClick={onClose}>
