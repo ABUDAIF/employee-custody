@@ -6,8 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node scripts/standalone-bot.js",
+    "postinstall": "prisma generate",
     "dev": "vite",
-    "build": "vite build",
+    "build": "prisma generate && vite build",
     "typecheck": "tsc --noEmit",
     "dist": "node ./node_modules/vite/bin/vite.js build && node ./scripts/prepare-prisma.mjs && node ./node_modules/electron-builder/out/cli/cli.js",
     "prisma:generate": "prisma generate",
