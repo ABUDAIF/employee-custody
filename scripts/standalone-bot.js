@@ -39,7 +39,13 @@ async function startBot() {
 
   const bot = new TelegramBot(token, { polling: true })
 
-  bot.on('polling_error', (err) => console.warn('Polling warning:', err.message))
+  bot.on('polling_error', (err) => {
+    console.warn("Telegram Polling Warning:", err.message)
+  })
+
+  bot.on('error', (err) => {
+    console.warn("Telegram Bot Warning:", err.message)
+  })
 
   bot.on('message', async (msg) => {
     try {
@@ -49,59 +55,70 @@ async function startBot() {
       const telegramName = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'موظف'
       const telegramUsername = msg.from?.username
 
-      const existingEmployee = await prisma.employee.findUnique({
-        where: { telegramId }
-      })
+      // 1. Check employee activation status
+      let employee = await prisma.employee.findUnique({ where: { telegramId } })
+      let isActivated = employee && employee.status === 'ACTIVE'
 
-      if (!existingEmployee) {
-        if (/^\d{6}$/.test(text)) {
-          const req = await prisma.activationRequest.findFirst({
-            where: { otpCode: text, status: 'CODE_GENERATED' },
-            include: { employee: true }
-          })
-
-          if (!req || !req.employeeId) {
-            await bot.sendMessage(chatId, '❌ كود التفعيل غير صحيح أو انتهت صلاحيته.')
-            return
-          }
-
-          const updatedEmployee = await prisma.employee.update({
-            where: { id: req.employeeId },
-            data: { telegramId, status: 'ACTIVE' }
-          })
-
-          await prisma.activationRequest.update({
-            where: { id: req.id },
-            data: { status: 'ACTIVATED', otpCode: null }
-          })
-
-          await bot.sendMessage(
-            chatId,
-            `✅ **تم تفعيل حسابك بنجاح!**\nمرحباً بك يا ${updatedEmployee.name}.\nيمكنك الآن استعراض رصيدك وتسجيل مصروفاتك بسهولة.`,
-            { parse_mode: 'Markdown', ...mainKeyboard }
-          )
-          return
-        }
-
-        let pendingReq = await prisma.activationRequest.findFirst({
+      if (!isActivated) {
+        // Find or create pending activation request
+        let req = await prisma.activationRequest.findFirst({
           where: { telegramId, status: { in: ['PENDING', 'CODE_GENERATED'] } }
         })
 
-        if (!pendingReq) {
-          await prisma.activationRequest.create({
+        if (!req) {
+          req = await prisma.activationRequest.create({
             data: { telegramId, telegramName, telegramUsername, status: 'PENDING' }
           })
         }
 
+        // Check if message is a 6-digit OTP code
+        if (/^\d{6}$/.test(text)) {
+          const matchedReq = await prisma.activationRequest.findFirst({
+            where: { otpCode: text, status: 'CODE_GENERATED' },
+            include: { employee: true }
+          })
+
+          if (matchedReq && matchedReq.employee) {
+            await prisma.employee.update({
+              where: { id: matchedReq.employee.id },
+              data: { telegramId, status: 'ACTIVE' }
+            })
+
+            await prisma.activationRequest.update({
+              where: { id: matchedReq.id },
+              data: { status: 'ACTIVATED' }
+            })
+
+            await bot.sendMessage(
+              chatId,
+              `✅ **تم تفعيل حسابك بنجاح!**\nمرحباً بك يا ${matchedReq.employee.name}.\nيمكنك الآن استعراض رصيدك وتسجيل مصروفاتك بسهولة.`,
+              { parse_mode: 'Markdown', ...mainKeyboard }
+            )
+            return
+          } else {
+            await bot.sendMessage(chatId, '❌ كود التفعيل غير صحيح أو انتهت صلاحيته. برجاء التأكد من المحاسب.')
+            return
+          }
+        }
+
         await bot.sendMessage(
           chatId,
-          `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**\n📞 **الهاتف:** \`+20 10 30324187\``,
-          { parse_mode: 'Markdown' }
+          `مرحباً بك يا **${telegramName}**!\n\n⚠️ **برجاء التواصل مع الحسابات للحصول على كود التفعيل.**\n📞 **الهاتف / الواتساب:** \`01030324187\``,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
+                  { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
+                ]
+              ]
+            }
+          }
         )
         return
       }
 
-      const employee = existingEmployee
       let session = userSessions.get(telegramId) || { step: 'IDLE' }
 
       if (text.includes('إلغاء') || text === '/cancel') {
@@ -115,13 +132,19 @@ async function startBot() {
       if (session.step === 'IDLE' || isExplicitMenu) {
         if (text.includes('رصيدي')) {
           userSessions.delete(telegramId)
-          const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
-          let custody = 0, expenses = 0
-          for (const e of entries) {
-            if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
-            else if (e.type === 'EXPENSE') expenses += e.amount
-          }
-          const balance = custody - expenses
+
+          const deposits = await prisma.ledgerEntry.aggregate({
+            where: { employeeId: employee.id, type: 'DEPOSIT' },
+            _sum: { amount: true }
+          })
+          const expenses = await prisma.ledgerEntry.aggregate({
+            where: { employeeId: employee.id, type: 'EXPENSE' },
+            _sum: { amount: true }
+          })
+
+          const totalCustody = deposits._sum.amount || 0
+          const totalExpenses = expenses._sum.amount || 0
+          const balance = totalCustody - totalExpenses
 
           await bot.sendMessage(
             chatId,
@@ -129,8 +152,8 @@ async function startBot() {
               `👤 **الموظف:** ${employee.name}\n` +
               `💼 **الوظيفة:** ${employee.jobTitle}\n` +
               `----------------------------------\n` +
-              `📥 **إجمالي العهد:** ${custody.toLocaleString('ar-EG')} ج.م\n` +
-              `📤 **إجمالي المصروفات:** ${expenses.toLocaleString('ar-EG')} ج.م\n` +
+              `📥 **إجمالي العهد:** ${totalCustody.toLocaleString('ar-EG')} ج.م\n` +
+              `📤 **إجمالي المصروفات:** ${totalExpenses.toLocaleString('ar-EG')} ج.م\n` +
               `💰 **الرصيد المتبقي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
             { parse_mode: 'Markdown', ...mainKeyboard }
           )
@@ -171,9 +194,19 @@ async function startBot() {
           await bot.sendMessage(
             chatId,
             `🏢 **${currentSettings?.companyName || 'شركة العهد المالية'}**\n\n` +
-              `📞 **قسم الحسابات:** \`+20 10 30324187\`\n\n` +
-              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى التواصل مباشرة مع الرقم أعلاه.`,
-            { parse_mode: 'Markdown', ...mainKeyboard }
+              `📞 **قسم الحسابات:** \`01030324187\`\n\n` +
+              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى الاتصال مباشرة أو التواصل عبر الواتساب.`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
+                    { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
+                  ]
+                ]
+              }
+            }
           )
           return
         }
@@ -293,7 +326,7 @@ async function startBot() {
               await finalizeExpense(bot, chatId, telegramId, employee, session)
             } catch (err) {
               console.error('Failed to download file stream:', err)
-              await bot.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحميل الفاتورة، سيتم حفظ المصروف بدون الصورة.')
+              await bot.sendMessage(chatId, '⚠️ حدث خطأ أثناء تحميل الفاتورة، سيتم حفظ المصروف بدون صورة.')
               await finalizeExpense(bot, chatId, telegramId, employee, session)
             }
           } else {
@@ -308,42 +341,24 @@ async function startBot() {
         }
       }
     } catch (err) {
-      console.error('Standalone Bot Message Error:', err)
+      console.error("Telegram bot error:", err)
+      try {
+        await bot.sendMessage(msg.chat.id, '⚠️ حدث خطأ أثناء تنفيذ الطلب.', mainKeyboard)
+      } catch (e) {}
     }
   })
 }
 
 async function finalizeExpense(bot, chatId, telegramId, employee, session) {
   try {
-    const today = new Date()
-    const yyyy = today.getFullYear()
-    const mm = String(today.getMonth() + 1).padStart(2, '0')
-    const dd = String(today.getDate()).padStart(2, '0')
-    const datePrefix = `${yyyy}${mm}${dd}`
-
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const countToday = await prisma.ledgerEntry.count({
-      where: { operationNo: { startsWith: datePrefix } }
-    })
-    const sequence = String(countToday + 1).padStart(6, '0')
-    const operationNo = `${datePrefix}${sequence}`
-
-    const attachmentData = []
-    if (session.attachments && session.attachments.length > 0) {
-      let idx = 1
-      for (const att of session.attachments) {
-        const ext = att.fileName.split('.').pop() || 'bin'
-        const storedName = `${operationNo}_${idx}.${ext}`
-        const relPath = `receipts/${storedName}`
-
-        attachmentData.push({
-          fileName: att.fileName,
-          filePath: relPath,
-          fileType: att.fileType,
-          fileSize: att.buffer.length
-        })
-        idx++
+      where: {
+        operationNo: { startsWith: todayStr }
       }
-    }
+    })
+    const seq = (countToday + 1).toString().padStart(6, '0')
+    const operationNo = `${todayStr}${seq}`
 
     const entry = await prisma.ledgerEntry.create({
       data: {
@@ -353,25 +368,44 @@ async function finalizeExpense(bot, chatId, telegramId, employee, session) {
         amount: session.amount,
         category: session.category,
         description: session.description,
-        createdBy: `${employee.name} (تليجرام السحابي)`,
-        attachments: {
-          create: attachmentData
-        }
-      },
-      include: {
-        attachments: true
+        createdBy: `${employee.name} (تليجرام)`
       }
     })
 
-    userSessions.delete(telegramId)
+    if (session.attachments && session.attachments.length > 0) {
+      const storageDir = path.join(process.env.APPDATA || process.cwd(), 'employee-custody-app', 'storage', 'receipts')
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true })
+      }
 
-    const entries = await prisma.ledgerEntry.findMany({ where: { employeeId: employee.id } })
-    let custody = 0, expenses = 0
-    for (const e of entries) {
-      if (e.type === 'DEPOSIT' || e.type === 'OPENING_BALANCE') custody += e.amount
-      else if (e.type === 'EXPENSE') expenses += e.amount
+      for (const att of session.attachments) {
+        const fullPath = path.join(storageDir, att.fileName)
+        fs.writeFileSync(fullPath, att.buffer)
+
+        await prisma.ledgerAttachment.create({
+          data: {
+            ledgerEntryId: entry.id,
+            fileName: att.fileName,
+            filePath: `storage/receipts/${att.fileName}`,
+            fileType: att.fileType,
+            fileSize: att.buffer.length
+          }
+        })
+      }
     }
-    const balance = custody - expenses
+
+    const deposits = await prisma.ledgerEntry.aggregate({
+      where: { employeeId: employee.id, type: 'DEPOSIT' },
+      _sum: { amount: true }
+    })
+    const expenses = await prisma.ledgerEntry.aggregate({
+      where: { employeeId: employee.id, type: 'EXPENSE' },
+      _sum: { amount: true }
+    })
+
+    const balance = (deposits._sum.amount || 0) - (expenses._sum.amount || 0)
+
+    userSessions.delete(telegramId)
 
     await bot.sendMessage(
       chatId,
@@ -380,7 +414,7 @@ async function finalizeExpense(bot, chatId, telegramId, employee, session) {
         `💰 **المبلغ:** ${entry.amount} ج.م\n` +
         `🏷️ **الفئة:** ${entry.category}\n` +
         `📝 **الوصف:** ${entry.description}\n` +
-        (entry.attachments.length > 0 ? `📎 **المرفقات:** ${entry.attachments.length} ملف مرفق\n` : '') +
+        (session.attachments && session.attachments.length > 0 ? `📎 **المرفقات:** ${session.attachments.length} ملف مرفق\n` : '') +
         `----------------------------------\n` +
         `💵 **رصيدك الحالي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
       { parse_mode: 'Markdown', ...mainKeyboard }
@@ -392,4 +426,4 @@ async function finalizeExpense(bot, chatId, telegramId, employee, session) {
   }
 }
 
-startBot()
+startBot().catch(console.error)
