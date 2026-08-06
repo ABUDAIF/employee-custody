@@ -1,4 +1,4 @@
-// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.0.7 Active 2026-08-06)
+// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.0.8 Active 2026-08-06)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
 const path = require('path')
@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 
-console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.0.7...")
+console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.0.8 (Base64 Cloud Attachments Active)...")
 
 const prisma = new PrismaClient({
   datasources: { db: { url: supabaseUrl } }
@@ -57,7 +57,7 @@ async function startBot() {
 
       // Global Test / Version command
       if (text === '/test' || text === '/version') {
-        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.0.7 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
+        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.0.8 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
@@ -387,20 +387,15 @@ async function finalizeExpense(bot, chatId, telegramId, employee, session) {
     })
 
     if (session.attachments && session.attachments.length > 0) {
-      const storageDir = path.join(process.env.APPDATA || process.cwd(), 'employee-custody-app', 'storage', 'receipts')
-      if (!fs.existsSync(storageDir)) {
-        fs.mkdirSync(storageDir, { recursive: true })
-      }
-
       for (const att of session.attachments) {
-        const fullPath = path.join(storageDir, att.fileName)
-        fs.writeFileSync(fullPath, att.buffer)
+        const base64Data = att.buffer.toString('base64')
+        const dataUri = `data:${att.fileType};base64,${base64Data}`
 
         await prisma.ledgerAttachment.create({
           data: {
             ledgerEntryId: entry.id,
             fileName: att.fileName,
-            filePath: `storage/receipts/${att.fileName}`,
+            filePath: dataUri,
             fileType: att.fileType,
             fileSize: att.buffer.length
           }
@@ -428,7 +423,7 @@ async function finalizeExpense(bot, chatId, telegramId, employee, session) {
         `💰 **المبلغ:** ${entry.amount} ج.م\n` +
         `🏷️ **الفئة:** ${entry.category}\n` +
         `📝 **الوصف:** ${entry.description}\n` +
-        (session.attachments && session.attachments.length > 0 ? `📎 **المرفقات:** ${session.attachments.length} ملف مرفق\n` : '') +
+        (session.attachments && session.attachments.length > 0 ? `📎 **المرفقات:** ${session.attachments.length} ملف مرفق (مخزنة سحابياً)\n` : '') +
         `----------------------------------\n` +
         `💵 **رصيدك الحالي:** *${balance.toLocaleString('ar-EG')} ج.م*`,
       { parse_mode: 'Markdown', ...mainKeyboard }

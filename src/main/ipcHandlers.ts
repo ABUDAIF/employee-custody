@@ -2,14 +2,12 @@ import { ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { employeeRepository } from '../services/repositories/EmployeeRepository'
-import { ledgerRepository } from '../services/repositories/LedgerRepository'
 import { activationRepository } from '../services/repositories/ActivationRepository'
+import { ledgerRepository } from '../services/repositories/LedgerRepository'
 import { monthCloseRepository } from '../services/repositories/MonthCloseRepository'
 import { settingsRepository } from '../services/repositories/SettingsRepository'
 import { telegramBotService } from '../services/telegram/botService'
-import { ExcelGenerator } from '../services/excel/excelGenerator'
-import { QRGenerator } from '../services/pdf/qrGenerator'
-import { AutoBackupService } from './autoBackup'
+import { ExcelGenerator } from '../services/excel/ExcelGenerator'
 import { getPermanentStorageDir } from '../services/db/prismaClient'
 
 export function registerIpcHandlers() {
@@ -34,47 +32,37 @@ export function registerIpcHandlers() {
     return await employeeRepository.deleteEmployee(id)
   })
 
+  ipcMain.handle('employee:getMetrics', async (_, employeeId: string) => {
+    return await employeeRepository.calculateEmployeeMetrics(employeeId)
+  })
+
   // Ledger Handlers
-  ipcMain.handle('ledger:getAll', async (_, options?: any) => {
+  ipcMain.handle('ledger:getAll', async (_, options: any) => {
     return await ledgerRepository.getAllEntries(options)
   })
 
-  ipcMain.handle('ledger:getEmployeeTimeline', async (_, employeeId: string) => {
+  ipcMain.handle('ledger:getTimeline', async (_, employeeId: string) => {
     return await ledgerRepository.getEmployeeTimeline(employeeId)
   })
 
-  ipcMain.handle('ledger:createDeposit', async (_, data: any) => {
-    const entry = await ledgerRepository.createDeposit(data)
-    if (entry.employee && entry.employee.phone) {
-      const empFull = await employeeRepository.getEmployeeById(entry.employeeId)
-      if (empFull && empFull.telegramId) {
-        telegramBotService.sendNotification(
-          empFull.telegramId,
-          `📥 **تم إضافة عهدة جديدة بقيمة ${data.amount} ج.م.**\n` +
-            `📝 **الوصف:** ${data.description}\n` +
-            `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
-            `----------------------------------\n` +
-            `💵 **رصيدك الحالي:** *${empFull.balance.toLocaleString('ar-EG')} ج.م*`
-        )
-      }
-    }
-    return entry
+  ipcMain.handle('ledger:addCustody', async (_, data: any) => {
+    return await ledgerRepository.addCustody(data)
   })
 
   ipcMain.handle('ledger:createExpense', async (_, data: any) => {
     return await ledgerRepository.createExpense(data)
   })
 
-  ipcMain.handle('ledger:getDashboardMetrics', async () => {
-    return await ledgerRepository.getDashboardMetrics()
+  ipcMain.handle('ledger:addAdjustment', async (_, data: any) => {
+    return await ledgerRepository.addAdjustment(data)
   })
 
-  ipcMain.handle('ledger:globalSearch', async (_, query: string) => {
-    return await ledgerRepository.globalSearch(query)
+  ipcMain.handle('ledger:deleteEntry', async (_, id: string) => {
+    return await ledgerRepository.deleteEntry(id)
   })
 
-  ipcMain.handle('ledger:generateQRCode', async (_, opNo: string) => {
-    return await QRGenerator.generateDataUrl(opNo)
+  ipcMain.handle('ledger:deleteAttachment', async (_, attachmentId: string) => {
+    return await ledgerRepository.deleteAttachment(attachmentId)
   })
 
   // Activation Handlers
@@ -92,12 +80,33 @@ export function registerIpcHandlers() {
     return await dialog.showSaveDialog(options)
   })
 
-  ipcMain.handle('shell:openPath', async (_, relativeOrAbsolutePath: string) => {
+  ipcMain.handle('shell:openPath', async (_, relativeOrAbsolutePath: string, fileName?: string) => {
     const { shell } = await import('electron')
     let fullPath = relativeOrAbsolutePath
-    if (!path.isAbsolute(fullPath)) {
+
+    // Auto-reconstruct Base64 attachments uploaded from Telegram Cloud Bot
+    if (relativeOrAbsolutePath && relativeOrAbsolutePath.startsWith('data:')) {
+      try {
+        const matches = relativeOrAbsolutePath.match(/^data:([^;]+);base64,(.+)$/)
+        if (matches) {
+          const mimeType = matches[1]
+          const base64Data = matches[2]
+          const ext = mimeType.includes('pdf') ? '.pdf' : mimeType.includes('png') ? '.png' : '.jpg'
+          const safeName = fileName || `receipt_${Date.now()}${ext}`
+          const storageDir = path.join(getPermanentStorageDir(), 'receipts')
+          if (!fs.existsSync(storageDir)) {
+            fs.mkdirSync(storageDir, { recursive: true })
+          }
+          fullPath = path.join(storageDir, safeName)
+          fs.writeFileSync(fullPath, Buffer.from(base64Data, 'base64'))
+        }
+      } catch (e: any) {
+        console.error('Failed to reconstruct Base64 attachment:', e)
+      }
+    } else if (!path.isAbsolute(fullPath)) {
       fullPath = path.join(getPermanentStorageDir(), relativeOrAbsolutePath)
     }
+
     if (fs.existsSync(fullPath)) {
       await shell.openPath(fullPath)
       return { success: true }
@@ -179,16 +188,16 @@ export function registerIpcHandlers() {
     return res
   })
 
-  // Backup Handlers
-  ipcMain.handle('backup:create', async () => {
-    return await AutoBackupService.createBackup()
+  // Backup & Restore Handlers
+  ipcMain.handle('system:createBackup', async () => {
+    return await settingsRepository.createBackup()
   })
 
-  ipcMain.handle('backup:getList', async () => {
-    return await AutoBackupService.getBackupList()
+  ipcMain.handle('system:getBackupList', async () => {
+    return await settingsRepository.getBackupList()
   })
 
-  ipcMain.handle('backup:restore', async (_, fileName: string) => {
-    return await AutoBackupService.restoreBackup(fileName)
+  ipcMain.handle('system:restoreBackup', async (_, fileName: string) => {
+    return await settingsRepository.restoreBackup(fileName)
   })
 }
