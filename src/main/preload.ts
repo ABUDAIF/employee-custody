@@ -37,6 +37,7 @@ const electronAPI = {
   broadcastTelegramMessage: (options: { employeeId?: string; message: string }) => ipcRenderer.invoke('telegram:broadcastMessage', options),
   getBroadcastHistory: () => ipcRenderer.invoke('telegram:getBroadcastHistory'),
   deleteBroadcastMessage: (broadcastId: string) => ipcRenderer.invoke('telegram:deleteBroadcastMessage', broadcastId),
+  sweepAndDeleteMessages: (count?: number) => ipcRenderer.invoke('telegram:sweepAndDeleteMessages', count),
 
   // Backup IPCs
   createBackup: () => ipcRenderer.invoke('backup:create'),

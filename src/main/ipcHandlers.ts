@@ -394,7 +394,6 @@ export function registerIpcHandlers() {
       }
     }
 
-    // Save Record to Broadcast History for Message Deletion Capabilities
     if (sentItems.length > 0) {
       const record = {
         id: `broadcast_${Date.now()}`,
@@ -457,7 +456,6 @@ export function registerIpcHandlers() {
       }
     }
 
-    // Remove record from history after deletion attempt
     history.splice(recordIndex, 1)
     saveBroadcastHistory(history)
 
@@ -466,6 +464,50 @@ export function registerIpcHandlers() {
       message: `تم حذف وسحب الرسالة بنجاح من هواتف ${deletedCount} موظف${failCount > 0 ? ` (وتعذر الحذف لـ ${failCount})` : ''}.`,
       deletedCount,
       failCount
+    }
+  })
+
+  // Sweep and Delete Recent Telegram Messages (For messages sent before archive was added)
+  ipcMain.handle('telegram:sweepAndDeleteMessages', async (_, count: number = 30) => {
+    const currentSettings = await settingsRepository.getSettings()
+    const token = currentSettings.telegramBotToken
+    if (!token) {
+      return { success: false, message: 'لم يتم تعيين Telegram Bot Token في الإعدادات.' }
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: { telegramId: { not: null }, status: 'ACTIVE' }
+    })
+
+    if (employees.length === 0) {
+      return { success: false, message: 'لم يتم العثور على موظفين مرتبطين بحسابات تليجرام.' }
+    }
+
+    let totalDeleted = 0
+
+    // Sweep recent 100 message IDs for each employee
+    for (const emp of employees) {
+      if (!emp.telegramId) continue
+      for (let msgId = 1; msgId <= count; msgId++) {
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: emp.telegramId,
+              message_id: msgId
+            })
+          })
+          const data: any = await res.json()
+          if (data.ok) totalDeleted++
+        } catch {}
+      }
+    }
+
+    return {
+      success: true,
+      message: `تم إجراء الفحص السريع وحذف ${totalDeleted} رسالة سابقة من هواتف الموظفين بنجاح!`,
+      totalDeleted
     }
   })
 }

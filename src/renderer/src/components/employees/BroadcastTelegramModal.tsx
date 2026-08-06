@@ -13,7 +13,8 @@ import {
   FaEdit,
   FaHistory,
   FaTrashAlt,
-  FaClock
+  FaClock,
+  FaBroom
 } from 'react-icons/fa'
 
 interface Employee {
@@ -53,6 +54,7 @@ export const BroadcastTelegramModal: React.FC<BroadcastTelegramModalProps> = ({
 
   const [historyList, setHistoryList] = useState<BroadcastRecord[]>([])
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [sweeping, setSweeping] = useState<boolean>(false)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -131,6 +133,28 @@ export const BroadcastTelegramModal: React.FC<BroadcastTelegramModalProps> = ({
       setStatusMsg({ type: 'error', text: `⚠️ خطأ في حذف الرسالة: ${err.message}` })
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleSweepLegacyMessages = async () => {
+    if (!window.confirm('سيتم إجراء فحص وحذف شامل لجميع الرسائل السابقة المبعوثة من البوت اليوم وتصفيتهن من هواتف الموظفين. هل تريد الاستمرار؟')) {
+      return
+    }
+
+    setSweeping(true)
+    setStatusMsg(null)
+
+    try {
+      const res = await (window.electronAPI as any).sweepAndDeleteMessages(50)
+      if (res.success) {
+        setStatusMsg({ type: 'success', text: `✅ ${res.message}` })
+      } else {
+        setStatusMsg({ type: 'error', text: `⚠️ ${res.message}` })
+      }
+    } catch (err: any) {
+      setStatusMsg({ type: 'error', text: `⚠️ خطأ أثناء تنظيف الرسائل: ${err.message}` })
+    } finally {
+      setSweeping(false)
     }
   }
 
@@ -450,13 +474,24 @@ export const BroadcastTelegramModal: React.FC<BroadcastTelegramModalProps> = ({
           ) : (
             /* History & Message Revocation Tab */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '420px', overflowY: 'auto' }}>
-              <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>
-                💡 يمكنك حذف وسحب أي رسالة سبق إرسالها من تليجرام جميع الموظفين في أي وقت بنقرة واحدة:
-              </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(234, 179, 8, 0.1)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
+                <span style={{ fontSize: '12px', color: '#facc15' }}>
+                  🧹 لحذف أي رسائل سابقة أُرسلت قبل تفعيل الأرشيف، اضغط زر التنظيف الفوري:
+                </span>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', background: '#eab308', color: '#000', fontWeight: 'bold' }}
+                  onClick={handleSweepLegacyMessages}
+                  disabled={sweeping}
+                >
+                  {sweeping ? <FaSpinner className="spin" /> : <FaBroom />}
+                  {sweeping ? 'جاري المسح...' : 'سحب وحذف الرسائل السابقة المبعوثة اليوم'}
+                </button>
+              </div>
 
               {historyList.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  لا توجد رسائل مرسلة سابقة في الأرشيف حالياً.
+                <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  لا توجد رسائل جديدة في الأرشيف المؤرخ. يمكنك استخدام زر "سحب وحذف الرسائل السابقة المبعوثة اليوم" أعلاه لحذف رسالتك السابقة.
                 </div>
               ) : (
                 historyList.map((item) => (
