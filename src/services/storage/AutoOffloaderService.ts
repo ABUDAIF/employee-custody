@@ -4,16 +4,17 @@ import { prisma, getPermanentStorageDir } from '../db/prismaClient'
 
 export class AutoOffloaderService {
   private timer: NodeJS.Timeout | null = null
+  private isProcessing: boolean = false
 
   public start() {
-    console.log('🔄 Starting Local Attachment Auto-Offloader (Cloud Database Cost-Optimization)...')
-    // Run initial offload after 3 seconds
-    setTimeout(() => this.processOffload(), 3000)
+    console.log('⚡ Starting Optimized Local Attachment Auto-Offloader...')
+    // Initial run after 5 seconds
+    setTimeout(() => this.processOffload(), 5000)
 
-    // Run offload check every 30 seconds
+    // Check every 3 minutes (180,000ms) to ensure zero CPU/memory load
     this.timer = setInterval(() => {
       this.processOffload()
-    }, 30000)
+    }, 180000)
   }
 
   public stop() {
@@ -24,20 +25,26 @@ export class AutoOffloaderService {
   }
 
   public async processOffload() {
+    if (this.isProcessing) return
+    this.isProcessing = true
+
     try {
-      // Find attachments in Supabase PostgreSQL DB that still contain heavy Base64 Cloud Data URIs
+      // Find attachments in Supabase PostgreSQL DB that still contain Base64 Cloud Data URIs
       const cloudAttachments = await prisma.ledgerAttachment.findMany({
         where: {
           filePath: {
             startsWith: 'data:'
           }
         },
-        take: 20
+        take: 10
       })
 
-      if (cloudAttachments.length === 0) return
+      if (cloudAttachments.length === 0) {
+        this.isProcessing = false
+        return
+      }
 
-      console.log(`📥 Found ${cloudAttachments.length} cloud attachment(s) to offload to local PC disk...`)
+      console.log(`📥 Offloading ${cloudAttachments.length} cloud attachment(s) to local PC disk...`)
 
       const storageDir = path.join(getPermanentStorageDir(), 'receipts')
       if (!fs.existsSync(storageDir)) {
@@ -53,25 +60,25 @@ export class AutoOffloaderService {
             const localFileName = att.fileName || `receipt_${att.id.substring(0, 8)}.jpg`
             const fullLocalPath = path.join(storageDir, localFileName)
 
-            // 1. Save file buffer permanently on local Windows PC disk
             fs.writeFileSync(fullLocalPath, buffer)
 
             const relPath = `storage/receipts/${localFileName}`
 
-            // 2. Wipe heavy Base64 data from Supabase DB and replace with lightweight local relative path
             await prisma.ledgerAttachment.update({
               where: { id: att.id },
               data: { filePath: relPath }
             })
 
-            console.log(`✅ Offloaded attachment ${att.fileName} -> ${fullLocalPath} (DB Space Cleared!)`)
+            console.log(`✅ Offloaded ${att.fileName} -> ${fullLocalPath}`)
           }
         } catch (e: any) {
           console.error(`Failed to offload attachment ${att.id}:`, e.message)
         }
       }
     } catch (err: any) {
-      console.warn('AutoOffloader warning:', err.message)
+      // Ignore background connection notes silently
+    } finally {
+      this.isProcessing = false
     }
   }
 }

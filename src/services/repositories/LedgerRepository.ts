@@ -2,6 +2,7 @@ import { prisma } from '../db/prismaClient'
 import { FileManager } from '../storage/fileManager'
 import { LedgerEntry, LedgerAttachment } from '@prisma/client'
 import { eventBus } from '../../main/eventBus'
+import { employeeRepository } from './EmployeeRepository'
 
 export interface LedgerEntryWithDetails extends LedgerEntry {
   employee: {
@@ -10,6 +11,7 @@ export interface LedgerEntryWithDetails extends LedgerEntry {
     jobTitle: string
     avatar: string | null
     phone: string
+    telegramId?: string | null
   }
   attachments: LedgerAttachment[]
 }
@@ -58,7 +60,7 @@ export class LedgerRepository {
       },
       include: {
         employee: {
-          select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+          select: { id: true, name: true, jobTitle: true, avatar: true, phone: true, telegramId: true }
         },
         attachments: true
       }
@@ -72,6 +74,39 @@ export class LedgerRepository {
       employeeName: entry.employee.name,
       createdAt: new Date()
     })
+
+    // Instant Telegram Notification to Employee
+    if (entry.employee && entry.employee.telegramId) {
+      try {
+        const metrics = await employeeRepository.calculateEmployeeMetrics(entry.employee.id)
+        const currentSettings = await prisma.settings.findFirst()
+        const token = currentSettings?.telegramBotToken
+        const telegramId = entry.employee.telegramId
+
+        if (token && telegramId) {
+          const text =
+            `📥 **تم إيداع عهدة جديدة لحسابك!**\n\n` +
+            `👤 **الموظف:** ${entry.employee.name}\n` +
+            `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
+            `💰 **مبلغ الإيداع:** ${entry.amount.toLocaleString('ar-EG')} ج.م\n` +
+            `📝 **البيان:** ${entry.description}\n` +
+            `----------------------------------\n` +
+            `💵 **رصيدك الحالي المتبقي:** *${metrics.balance.toLocaleString('ar-EG')} ج.م*`
+
+          fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: telegramId,
+              text,
+              parse_mode: 'Markdown'
+            })
+          }).catch((err) => console.error('Deposit notification Telegram fetch warning:', err))
+        }
+      } catch (err: any) {
+        console.error('Failed to notify employee on deposit:', err.message)
+      }
+    }
 
     return entry
   }
@@ -123,7 +158,7 @@ export class LedgerRepository {
       },
       include: {
         employee: {
-          select: { id: true, name: true, jobTitle: true, avatar: true, phone: true }
+          select: { id: true, name: true, jobTitle: true, avatar: true, phone: true, telegramId: true }
         },
         attachments: true
       }

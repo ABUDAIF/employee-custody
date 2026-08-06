@@ -73,6 +73,83 @@ export function registerIpcHandlers() {
     return await ledgerRepository.deleteAttachment(attachmentId)
   })
 
+  // Attachment Direct Base64 & SaveAs Handlers
+  ipcMain.handle('attachment:getBase64', async (_, relativeOrAbsolutePath: string) => {
+    if (!relativeOrAbsolutePath) return null
+    if (relativeOrAbsolutePath.startsWith('data:')) return relativeOrAbsolutePath
+
+    let fullPath = relativeOrAbsolutePath
+    if (!path.isAbsolute(fullPath)) {
+      const cleanRelPath = relativeOrAbsolutePath.replace(/^storage[/\\]/i, '')
+      fullPath = path.join(getPermanentStorageDir(), cleanRelPath)
+    }
+
+    if (!fs.existsSync(fullPath)) {
+      const baseUserDir = path.dirname(getPermanentStorageDir())
+      const altPath1 = path.join(baseUserDir, relativeOrAbsolutePath)
+      const altPath2 = path.join(getPermanentStorageDir(), 'receipts', path.basename(relativeOrAbsolutePath))
+      const altPath3 = path.join(getPermanentStorageDir(), path.basename(relativeOrAbsolutePath))
+
+      if (fs.existsSync(altPath1)) fullPath = altPath1
+      else if (fs.existsSync(altPath2)) fullPath = altPath2
+      else if (fs.existsSync(altPath3)) fullPath = altPath3
+    }
+
+    if (fs.existsSync(fullPath)) {
+      const buffer = fs.readFileSync(fullPath)
+      const ext = path.extname(fullPath).toLowerCase()
+      const mime = ext === '.pdf' ? 'application/pdf' : ext === '.png' ? 'image/png' : 'image/jpeg'
+      return `data:${mime};base64,${buffer.toString('base64')}`
+    }
+    return null
+  })
+
+  ipcMain.handle('attachment:saveAs', async (_, relativeOrAbsolutePath: string, defaultFileName: string) => {
+    const { dialog } = await import('electron')
+    let base64Data: string | null = null
+
+    if (relativeOrAbsolutePath && relativeOrAbsolutePath.startsWith('data:')) {
+      const matches = relativeOrAbsolutePath.match(/^data:([^;]+);base64,(.+)$/)
+      if (matches) base64Data = matches[2]
+    } else {
+      let fullPath = relativeOrAbsolutePath
+      if (!path.isAbsolute(fullPath)) {
+        const cleanRelPath = relativeOrAbsolutePath.replace(/^storage[/\\]/i, '')
+        fullPath = path.join(getPermanentStorageDir(), cleanRelPath)
+      }
+      if (!fs.existsSync(fullPath)) {
+        const baseUserDir = path.dirname(getPermanentStorageDir())
+        const altPath1 = path.join(baseUserDir, relativeOrAbsolutePath)
+        const altPath2 = path.join(getPermanentStorageDir(), 'receipts', path.basename(relativeOrAbsolutePath))
+        const altPath3 = path.join(getPermanentStorageDir(), path.basename(relativeOrAbsolutePath))
+        if (fs.existsSync(altPath1)) fullPath = altPath1
+        else if (fs.existsSync(altPath2)) fullPath = altPath2
+        else if (fs.existsSync(altPath3)) fullPath = altPath3
+      }
+      if (fs.existsSync(fullPath)) {
+        base64Data = fs.readFileSync(fullPath).toString('base64')
+      }
+    }
+
+    if (!base64Data) {
+      return { success: false, message: 'تعذر العثور على ملف المستند للحفظ.' }
+    }
+
+    const ext = defaultFileName.split('.').pop() || 'jpg'
+    const saveRes = await dialog.showSaveDialog({
+      title: 'حفظ المستند على الكمبيوتر',
+      defaultPath: defaultFileName || 'receipt_document.jpg',
+      filters: [{ name: 'مستندات وفواتير', extensions: [ext, 'jpg', 'png', 'pdf'] }]
+    })
+
+    if (!saveRes.canceled && saveRes.filePath) {
+      fs.writeFileSync(saveRes.filePath, Buffer.from(base64Data, 'base64'))
+      return { success: true, filePath: saveRes.filePath }
+    }
+
+    return { success: false, message: 'تم إلغاء عملية الحفظ.' }
+  })
+
   // Activation Handlers
   ipcMain.handle('activation:getPending', async () => {
     return await activationRepository.getPendingRequests()
@@ -93,7 +170,6 @@ export function registerIpcHandlers() {
     let fullPath = relativeOrAbsolutePath
     let isBase64 = false
 
-    // 1. Auto-reconstruct Base64 attachments uploaded from Telegram Cloud Bot
     if (relativeOrAbsolutePath && relativeOrAbsolutePath.startsWith('data:')) {
       isBase64 = true
       try {
@@ -120,12 +196,10 @@ export function registerIpcHandlers() {
         }
       }
     } else if (!path.isAbsolute(fullPath)) {
-      // Clean duplicate "storage/" prefix to fix double storage path duplication
       const cleanRelPath = relativeOrAbsolutePath.replace(/^storage[/\\]/i, '')
       fullPath = path.join(getPermanentStorageDir(), cleanRelPath)
     }
 
-    // Candidate fallback paths if path doesn't exist
     if (!fs.existsSync(fullPath)) {
       const baseUserDir = path.dirname(getPermanentStorageDir())
       const altPath1 = path.join(baseUserDir, relativeOrAbsolutePath)

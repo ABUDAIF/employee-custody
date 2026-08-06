@@ -1,6 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaTimes, FaFileAlt, FaFileImage, FaFolderOpen, FaInfoCircle } from 'react-icons/fa'
+import {
+  FaTimes,
+  FaFileAlt,
+  FaFileImage,
+  FaSearchPlus,
+  FaSearchMinus,
+  FaRedo,
+  FaDownload,
+  FaPrint,
+  FaSpinner
+} from 'react-icons/fa'
 
 interface Attachment {
   id: string
@@ -17,41 +27,97 @@ interface AttachmentModalProps {
 }
 
 export const AttachmentModal: React.FC<AttachmentModalProps> = ({ isOpen, attachments, onClose }) => {
-  const [opening, setOpening] = useState<string | null>(null)
-  const [logInfo, setLogInfo] = useState<{ type: 'error' | 'info'; message: string; details?: string } | null>(null)
+  const [selectedIndex, setSelectedIndex] = useState<number>(0)
+  const [base64Uri, setBase64Uri] = useState<string | null>(null)
+  const [loading, setLoading] = useState<boolean>(false)
+  const [zoom, setZoom] = useState<number>(1)
+  const [rotation, setRotation] = useState<number>(0)
+  const [statusMsg, setStatusMsg] = useState<string | null>(null)
 
-  if (!isOpen) return null
+  const activeAtt = attachments[selectedIndex] || attachments[0]
 
-  const handleOpenFile = async (att: Attachment) => {
+  useEffect(() => {
+    if (isOpen && activeAtt) {
+      loadAttachmentData(activeAtt)
+    }
+  }, [isOpen, selectedIndex, activeAtt?.id])
+
+  const loadAttachmentData = async (att: Attachment) => {
+    setLoading(true)
+    setBase64Uri(null)
+    setStatusMsg(null)
+    setZoom(1)
+    setRotation(0)
+
     try {
-      setOpening(att.id)
-      setLogInfo(null)
-      const res = await window.electronAPI.openPath(att.filePath, att.fileName)
-
-      if (!res.success) {
-        const isLegacy = att.filePath && !att.filePath.startsWith('data:')
-        if (isLegacy) {
-          setLogInfo({
-            type: 'info',
-            message: `ℹ️ هذه الفاتورة تم تسجيلها من التليجرام قبل تفعيل التزامن المباشر، ومسارها محفوظ على السحابة (${att.filePath}).`,
-            details: `المسار المطلوب على الويندوز: ${res.fullPath || 'غير متوفر'}\nحالة التشفير: ملف قديم غير مدمج شفرة Base64.\nتنبيه: الفواتير المسجلة بعد التحديث تُفتح وتُعرض تلقائياً 100%.`
-          })
+      if (att.filePath && att.filePath.startsWith('data:')) {
+        setBase64Uri(att.filePath)
+      } else {
+        const uri = await (window.electronAPI as any).getAttachmentBase64(att.filePath)
+        if (uri) {
+          setBase64Uri(uri)
         } else {
-          setLogInfo({
-            type: 'error',
-            message: `⚠️ ${res.message || 'لم نتمكن من فتح الملف تلقائياً.'}`,
-            details: `مسار الداتابيز: ${res.dbPath || att.filePath}\nالمسار المستهدف: ${res.fullPath || 'غير معروف'}`
-          })
+          setStatusMsg('⚠️ تعذر تحميل صورة المستند من القرص المحلي.')
         }
       }
     } catch (err: any) {
-      setLogInfo({
-        type: 'error',
-        message: `⚠️ خطأ في فتح المستند: ${err.message}`
-      })
+      setStatusMsg(`⚠️ خطأ أثناء فتح المستند: ${err.message}`)
     } finally {
-      setOpening(null)
+      setLoading(false)
     }
+  }
+
+  if (!isOpen || !activeAtt) return null
+
+  const isImage = activeAtt.fileType?.includes('image') || activeAtt.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+  const isPdf = activeAtt.fileType?.includes('pdf') || activeAtt.fileName.endsWith('.pdf')
+
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3))
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5))
+  const handleResetZoom = () => {
+    setZoom(1)
+    setRotation(0)
+  }
+  const handleRotate = () => setRotation((prev) => (prev + 90) % 360)
+
+  const handleSaveAs = async () => {
+    try {
+      const res = await (window.electronAPI as any).saveAttachmentAs(activeAtt.filePath, activeAtt.fileName)
+      if (res.success) {
+        setStatusMsg(`✅ تم حفظ الملف بنجاح في: ${res.filePath}`)
+      } else if (res.message && !res.message.includes('إلغاء')) {
+        setStatusMsg(`⚠️ ${res.message}`)
+      }
+    } catch (err: any) {
+      setStatusMsg(`⚠️ خطأ في الحفظ: ${err.message}`)
+    }
+  }
+
+  const handlePrint = () => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html dir="rtl">
+        <head>
+          <title>طباعة مستند فاتورة - ${activeAtt.fileName}</title>
+          <style>
+            @page { size: A4 portrait; margin: 0; }
+            body { margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; background: #fff; }
+            img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+          </style>
+        </head>
+        <body>
+          ${
+            isImage && base64Uri
+              ? `<img src="${base64Uri}" onload="window.print();window.close();" />`
+              : `<p>يرجى طباعة المستند مباشرة</p>`
+          }
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
   }
 
   return (
@@ -63,111 +129,161 @@ export const AttachmentModal: React.FC<AttachmentModalProps> = ({ isOpen, attach
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)',
+          background: 'rgba(10, 15, 30, 0.88)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: 'flex-start',
           zIndex: 1000,
-          backdropFilter: 'blur(4px)'
+          backdropFilter: 'blur(8px)',
+          overflowY: 'auto',
+          padding: '20px 10px'
         }}
         onClick={onClose}
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          className="card"
-          style={{ width: '560px', maxWidth: '92%', padding: '24px' }}
+        {/* Top Control Bar */}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '1000px',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '16px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            zIndex: 10
+          }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📎 مستندات ومرفقات العملية ({attachments.length})
-            </h3>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <FaTimes size={18} />
+          {/* Document Tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto' }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', marginLeft: '10px' }}>
+              📄 المرفقات ({attachments.length}):
+            </span>
+            {attachments.map((att, idx) => (
+              <button
+                key={att.id}
+                onClick={() => setSelectedIndex(idx)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px',
+                  border: 'none',
+                  background: selectedIndex === idx ? 'var(--accent-brand)' : 'var(--bg-surface-hover)',
+                  color: selectedIndex === idx ? '#fff' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontWeight: selectedIndex === idx ? 'bold' : 'normal',
+                  transition: 'var(--transition-fast)'
+                }}
+              >
+                {att.fileName}
+              </button>
+            ))}
+          </div>
+
+          {/* Action Tools: Zoom, Rotate, Save, Print, Close */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={handleZoomIn} title="تكبير">
+              <FaSearchPlus /> +
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={handleZoomOut} title="تصغير">
+              <FaSearchMinus /> -
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={handleResetZoom} title="إعادة ضبط (100%)">
+              {Math.round(zoom * 100)}%
+            </button>
+            <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px' }} onClick={handleRotate} title="تدوير (90°)">
+              <FaRedo />
+            </button>
+            <button className="btn btn-success" style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={handleSaveAs} title="تنزيل وتخزين الملف علي الجهاز">
+              <FaDownload /> تنزيل/حفظ
+            </button>
+            {isImage && (
+              <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={handlePrint} title="طباعة الفاتورة">
+                <FaPrint /> طباعة
+              </button>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginRight: '10px' }}>
+              <FaTimes size={20} />
             </button>
           </div>
+        </div>
 
-          {logInfo && (
-            <div
-              style={{
-                padding: '12px 16px',
-                background: logInfo.type === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(59, 130, 246, 0.12)',
-                color: logInfo.type === 'error' ? 'var(--accent-danger)' : '#60a5fa',
-                border: `1px solid ${logInfo.type === 'error' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                borderRadius: 'var(--radius-md)',
-                fontSize: '12px',
-                marginBottom: '16px',
-                lineHeight: '1.6'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FaInfoCircle size={14} /> {logInfo.message}
-              </div>
-              {logInfo.details && (
-                <pre
+        {statusMsg && (
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '1000px',
+              padding: '10px 16px',
+              background: statusMsg.startsWith('✅') ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              color: statusMsg.startsWith('✅') ? '#4ade80' : 'var(--accent-danger)',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '12px',
+              marginBottom: '16px',
+              textAlign: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {statusMsg}
+          </div>
+        )}
+
+        {/* A4 Paper Frame Canvas */}
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          style={{
+            width: '210mm',
+            minHeight: '297mm',
+            background: '#ffffff',
+            borderRadius: '4px',
+            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.6)',
+            padding: '20px',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            marginBottom: '40px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#475569' }}>
+              <FaSpinner className="spin" size={32} />
+              <span>جاري تحميل معاينة صفحة A4 للمستند...</span>
+            </div>
+          ) : base64Uri ? (
+            isPdf ? (
+              <iframe src={base64Uri} style={{ width: '100%', height: '280mm', border: 'none' }} title={activeAtt.fileName} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <img
+                  src={base64Uri}
+                  alt={activeAtt.fileName}
                   style={{
-                    marginTop: '8px',
-                    padding: '8px 10px',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    borderRadius: '4px',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                    fontSize: '11px',
-                    fontFamily: 'monospace',
-                    color: 'var(--text-muted)'
+                    maxWidth: '100%',
+                    maxHeight: '270mm',
+                    objectFit: 'contain',
+                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
+                    transition: 'transform 0.2s ease-out'
                   }}
-                >
-                  {logInfo.details}
-                </pre>
-              )}
+                />
+              </div>
+            )
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#64748b' }}>
+              <FaFileAlt size={48} color="#94a3b8" />
+              <p style={{ fontSize: '14px', fontWeight: 'bold' }}>{activeAtt.fileName}</p>
+              <p style={{ fontSize: '12px' }}>المستند مخزن على القرص المحلي بمسار: {activeAtt.filePath}</p>
             </div>
           )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '360px', overflowY: 'auto' }}>
-            {attachments.map((att) => {
-              const isImage = att.fileType?.includes('image') || att.fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-              const isCloudDirect = att.filePath && att.filePath.startsWith('data:')
-              const sizeKB = (att.fileSize / 1024).toFixed(1)
-
-              return (
-                <div
-                  key={att.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--bg-surface-hover)',
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {isImage ? <FaFileImage size={24} color="#3b82f6" /> : <FaFileAlt size={24} color="#ef4444" />}
-                    <div>
-                      <strong style={{ fontSize: '13px', display: 'block', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {att.fileName}
-                      </strong>
-                      <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-                        {sizeKB} KB • {isCloudDirect ? '☁️ تزامن سحابي مباشر' : '📦 مسار قديم'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    className="btn btn-primary"
-                    style={{ padding: '8px 14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    onClick={() => handleOpenFile(att)}
-                    disabled={opening === att.id}
-                  >
-                    <FaFolderOpen /> {opening === att.id ? 'جاري الفتح...' : 'عرض / فتح'}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
         </motion.div>
       </div>
     </AnimatePresence>

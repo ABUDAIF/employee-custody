@@ -40,8 +40,10 @@ const electronAPI = {
   getBackupList: () => ipcRenderer.invoke('backup:getList'),
   restoreBackup: (fileName: string) => ipcRenderer.invoke('backup:restore', fileName),
 
-  // File Shell IPCs
+  // File Shell & Attachment IPCs
   openPath: (path: string, fileName?: string) => ipcRenderer.invoke('shell:openPath', path, fileName),
+  getAttachmentBase64: (path: string) => ipcRenderer.invoke('attachment:getBase64', path),
+  saveAttachmentAs: (path: string, defaultFileName: string) => ipcRenderer.invoke('attachment:saveAs', path, defaultFileName),
 
   // Event Listeners (Event Bus to React UI)
   on: (channel: string, callback: (...args: any[]) => void) => {
