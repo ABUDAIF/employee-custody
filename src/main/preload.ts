@@ -34,6 +34,7 @@ const electronAPI = {
   updateSettings: (data: any) => ipcRenderer.invoke('settings:update', data),
   getBotStatus: () => ipcRenderer.invoke('bot:getStatus'),
   connectBot: (token: string) => ipcRenderer.invoke('bot:connect', token),
+  broadcastTelegramMessage: (options: { employeeId?: string; message: string }) => ipcRenderer.invoke('telegram:broadcastMessage', options),
 
   // Backup IPCs
   createBackup: () => ipcRenderer.invoke('backup:create'),

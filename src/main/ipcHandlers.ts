@@ -8,7 +8,8 @@ import { monthCloseRepository } from '../services/repositories/MonthCloseReposit
 import { settingsRepository } from '../services/repositories/SettingsRepository'
 import { telegramBotService } from '../services/telegram/botService'
 import { ExcelGenerator } from '../services/excel/ExcelGenerator'
-import { getPermanentStorageDir } from '../services/db/prismaClient'
+import { getPermanentStorageDir, prisma } from '../services/db/prismaClient'
+import { AutoBackupService } from './autoBackup'
 
 export function registerIpcHandlers() {
   // Employee Handlers
@@ -300,16 +301,70 @@ export function registerIpcHandlers() {
     return res
   })
 
-  // Backup IPCs
+  // Backup IPCs (Uses AutoBackupService)
   ipcMain.handle('backup:create', async () => {
-    return await settingsRepository.createBackup()
+    return await AutoBackupService.createBackup()
   })
 
   ipcMain.handle('backup:getList', async () => {
-    return await settingsRepository.getBackupList()
+    return await AutoBackupService.getBackupList()
   })
 
   ipcMain.handle('backup:restore', async (_, fileName: string) => {
-    return await settingsRepository.restoreBackup(fileName)
+    return await AutoBackupService.restoreBackup(fileName)
+  })
+
+  // Telegram Broadcast & Direct Messaging IPC
+  ipcMain.handle('telegram:broadcastMessage', async (_, options: { employeeId?: string; message: string }) => {
+    const currentSettings = await settingsRepository.getSettings()
+    const token = currentSettings.telegramBotToken
+    if (!token) {
+      return { success: false, message: 'لم يتم تعيين Telegram Bot Token في الإعدادات.' }
+    }
+
+    let targetEmployees: any[] = []
+    if (options.employeeId && options.employeeId !== 'ALL') {
+      const emp = await prisma.employee.findUnique({ where: { id: options.employeeId } })
+      if (emp && emp.telegramId) targetEmployees.push(emp)
+    } else {
+      targetEmployees = await prisma.employee.findMany({
+        where: { telegramId: { not: null }, status: 'ACTIVE' }
+      })
+    }
+
+    if (targetEmployees.length === 0) {
+      return { success: false, message: 'لم يتم العثور على موظفين مفعّلين يملكون حسابات تليجرام مرتبطة.' }
+    }
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const emp of targetEmployees) {
+      if (!emp.telegramId) continue
+      try {
+        const text = `📢 **تنبيه وإشعار من إدارة الحسابات (${currentSettings.companyName})**\n\n${options.message}`
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: emp.telegramId,
+            text,
+            parse_mode: 'Markdown'
+          })
+        })
+        const data: any = await res.json()
+        if (data.ok) successCount++
+        else failCount++
+      } catch {
+        failCount++
+      }
+    }
+
+    return {
+      success: true,
+      message: `تم إرسال الرسالة بنجاح إلى ${successCount} موظف${failCount > 0 ? ` (وفشل الإرسال لـ ${failCount})` : ''}.`,
+      successCount,
+      failCount
+    }
   })
 }

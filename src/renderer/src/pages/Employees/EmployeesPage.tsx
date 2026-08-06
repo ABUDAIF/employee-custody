@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FaUserPlus, FaPhone, FaExchangeAlt, FaCheckCircle, FaHourglassHalf } from 'react-icons/fa'
+import { FaUserPlus, FaPhone, FaExchangeAlt, FaCheckCircle, FaHourglassHalf, FaBullhorn, FaPaperPlane } from 'react-icons/fa'
 import { useEmployeeStore } from '../../stores/useEmployeeStore'
 import { NewEmployeeModal } from '../../components/common/NewEmployeeModal'
+import { BroadcastTelegramModal } from '../../components/employees/BroadcastTelegramModal'
 import { useNavigate } from 'react-router-dom'
 
 export const EmployeesPage: React.FC = () => {
   const { employees, loading, fetchEmployees } = useEmployeeStore()
   const [isNewOpen, setIsNewOpen] = useState(false)
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false)
+  const [targetEmployeeId, setTargetEmployeeId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
     fetchEmployees()
   }, [])
+
+  const handleOpenBroadcast = (employeeId: string | null = null, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setTargetEmployeeId(employeeId)
+    setIsBroadcastOpen(true)
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -23,10 +32,17 @@ export const EmployeesPage: React.FC = () => {
           <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>إدارة ملفات الموظفين، حالة التفعيل ورصيد العهد الحالية</p>
         </div>
 
-        <button className="btn btn-primary" onClick={() => setIsNewOpen(true)}>
-          <FaUserPlus size={16} />
-          إضافة موظف جديد
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn btn-secondary" onClick={() => handleOpenBroadcast('ALL')}>
+            <FaBullhorn size={16} color="var(--accent-brand)" />
+            إرسال إشعار تليجرام للموظفين
+          </button>
+
+          <button className="btn btn-primary" onClick={() => setIsNewOpen(true)}>
+            <FaUserPlus size={16} />
+            إضافة موظف جديد
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -104,10 +120,19 @@ export const EmployeesPage: React.FC = () => {
                     </h4>
                   </div>
 
-                  <div style={{ textAlign: 'left' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>عدد الحركات</span>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <FaExchangeAlt size={12} color="var(--text-muted)" /> {emp.transactionCount}
+                  <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                    {isActivated && emp.telegramId && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={(e) => handleOpenBroadcast(emp.id, e)}
+                        title="إرسال رسالة تليجرام خاصة لهذا الموظف"
+                      >
+                        <FaPaperPlane size={10} color="#3b82f6" /> مراسلة
+                      </button>
+                    )}
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <FaExchangeAlt size={10} /> {emp.transactionCount} حركات
                     </div>
                   </div>
                 </div>
@@ -118,6 +143,12 @@ export const EmployeesPage: React.FC = () => {
       )}
 
       <NewEmployeeModal isOpen={isNewOpen} onClose={() => setIsNewOpen(false)} />
+      <BroadcastTelegramModal
+        isOpen={isBroadcastOpen}
+        employees={employees}
+        selectedEmployeeId={targetEmployeeId}
+        onClose={() => setIsBroadcastOpen(false)}
+      />
     </motion.div>
   )
 }
