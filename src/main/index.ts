@@ -26,6 +26,7 @@ import { registerIpcHandlers } from './ipcHandlers'
 import { eventBus } from './eventBus'
 import { telegramBotService } from '../services/telegram/botService'
 import { AutoBackupService } from './autoBackup'
+import { autoOffloaderService } from '../services/storage/AutoOffloaderService'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -95,6 +96,12 @@ app.whenReady().then(async () => {
     console.error('Auto Backup scheduler warning:', err)
   }
 
+  try {
+    autoOffloaderService.start()
+  } catch (err) {
+    console.error('Auto Offloader warning:', err)
+  }
+
   await createWindow()
 
   app.on('activate', () => {
@@ -103,5 +110,6 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
+  autoOffloaderService.stop()
   if (process.platform !== 'darwin') app.quit()
 })
