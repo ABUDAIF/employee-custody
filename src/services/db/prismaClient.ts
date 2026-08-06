@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import path from 'path'
 import fs from 'fs'
 
-export const SUPABASE_URL = "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres?sslmode=require"
+export const SUPABASE_URL = "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
 export function getPermanentStorageDir(): string {
   let baseDataDir: string
@@ -29,7 +29,7 @@ export function getPermanentStorageDir(): string {
 }
 
 const activeDatabaseUrl = process.env.DATABASE_URL || SUPABASE_URL
-console.log('🌐 Connected to Cloud Database (Supabase PostgreSQL 24/7)')
+console.log('🌐 Connected to Cloud Database (Supabase PostgreSQL Pooler 24/7)')
 
 export const prisma = new PrismaClient({
   datasources: {
