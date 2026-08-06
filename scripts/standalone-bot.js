@@ -1,4 +1,4 @@
-// Standalone Cloud Telegram Bot Worker for Railway / Render (Runs 24/7)
+// Standalone Cloud Telegram Bot Worker for Railway / Render (Runs 24/7 - v2.0.4 2026-08-06)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
 const path = require('path')
@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 
-console.log("🚀 Starting Standalone Cloud Telegram Bot 24/7 Service...")
+console.log("🚀 Starting Standalone Cloud Telegram Bot 24/7 Service (v2.0.4 Active)...")
 
 const prisma = new PrismaClient({
   datasources: { db: { url: supabaseUrl } }
