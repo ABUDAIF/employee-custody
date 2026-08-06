@@ -28,7 +28,7 @@ export class TelegramBotService {
     }
   }
 
-  public async initBot(token?: string) {
+  public async initBot(token?: string, enableLocalPolling: boolean = false) {
     if (this.bot) {
       try {
         await this.bot.stopPolling()
@@ -69,18 +69,23 @@ export class TelegramBotService {
       }
 
       const botInfo = data.result
-      this.bot = new TelegramBot(activeToken, { polling: true })
 
-      this.bot.on('polling_error', (err) => {
-        console.warn('Telegram Polling Warning:', err.message)
-      })
-      this.bot.on('error', (err) => {
-        console.warn('Telegram Bot Warning:', err.message)
-      })
+      // If enableLocalPolling is true, start local polling (only if user explicitly forces local mode)
+      if (enableLocalPolling) {
+        this.bot = new TelegramBot(activeToken, { polling: true })
+        this.bot.on('polling_error', (err) => {
+          console.warn('Telegram Polling Warning:', err.message)
+        })
+        this.bot.on('error', (err) => {
+          console.warn('Telegram Bot Warning:', err.message)
+        })
+        this.setupHandlers()
+        console.log(`🤖 Telegram Bot Active with Local Polling: @${botInfo.username}`)
+      } else {
+        // Cloud 24/7 Railway Worker is active, so desktop app validates token via HTTP API without local polling collision
+        console.log(`☁️ Telegram Bot Token verified! Cloud Railway Worker handles 24/7 polling for @${botInfo.username}`)
+      }
 
-      this.setupHandlers()
-
-      console.log(`🤖 Telegram Bot Active & Connected locally: @${botInfo.username}`)
       eventBus.broadcast('telegram:status', { connected: true, botInfo })
       return { connected: true, botInfo }
     } catch (err: any) {
@@ -95,10 +100,17 @@ export class TelegramBotService {
   }
 
   public async getBotStatus() {
-    if (!this.bot) return { connected: false }
     try {
-      const me = await this.bot.getMe()
-      return { connected: true, botInfo: me }
+      const currentSettings = await settingsRepository.getSettings()
+      const token = (currentSettings.telegramBotToken || '').trim()
+      if (!token) return { connected: false }
+
+      const response = await fetch(`https://api.telegram.org/bot${token}/getMe`)
+      const data: any = await response.json()
+      if (data.ok) {
+        return { connected: true, botInfo: data.result }
+      }
+      return { connected: false }
     } catch {
       return { connected: false }
     }
