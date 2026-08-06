@@ -1,4 +1,4 @@
-// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.0.5 Active 2026-08-06)
+// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.0.6 Active 2026-08-06)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
 const path = require('path')
@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 
-console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.0.5...")
+console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.0.6...")
 
 const prisma = new PrismaClient({
   datasources: { db: { url: supabaseUrl } }
@@ -56,12 +56,11 @@ async function startBot() {
       const telegramUsername = msg.from?.username
 
       if (text === '/test' || text === '/version') {
-        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.0.5 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
+        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.0.6 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
                 { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
               ]
             ]
@@ -124,7 +123,6 @@ async function startBot() {
             reply_markup: {
               inline_keyboard: [
                 [
-                  { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
                   { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
                 ]
               ]
@@ -210,13 +208,12 @@ async function startBot() {
             chatId,
             `🏢 **${currentSettings?.companyName || 'شركة العهد المالية'}**\n\n` +
               `📞 **قسم الحسابات:** \`01030324187\`\n\n` +
-              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى الاتصال مباشرة أو التواصل عبر الواتساب.`,
+              `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى الاتصال على الرقم أعلاه أو التواصل عبر الواتساب.`,
             {
               parse_mode: 'Markdown',
               reply_markup: {
                 inline_keyboard: [
                   [
-                    { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
                     { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
                   ]
                 ]

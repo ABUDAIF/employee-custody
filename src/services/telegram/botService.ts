@@ -144,7 +144,6 @@ export class TelegramBotService {
               reply_markup: {
                 inline_keyboard: [
                   [
-                    { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
                     { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
                   ]
                 ]
@@ -215,13 +214,12 @@ export class TelegramBotService {
               chatId,
               `🏢 **${settings.companyName}**\n\n` +
                 `📞 **قسم الحسابات:** \`01030324187\`\n\n` +
-                `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى الاتصال مباشرة أو التواصل عبر الواتساب.`,
+                `لأي استفسار أو طلب تعزيز عهدة جديدة، يرجى الاتصال على الرقم أعلاه أو التواصل عبر الواتساب.`,
               {
                 parse_mode: 'Markdown',
                 reply_markup: {
                   inline_keyboard: [
                     [
-                      { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
                       { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
                     ]
                   ]
@@ -363,7 +361,7 @@ export class TelegramBotService {
       } catch (err: any) {
         console.error('Telegram bot message handling error:', err)
         try {
-          await this.bot?.sendMessage(msg.chat.id, '⚠️ حدث خطأ أثناء تنفيذ الطلب. يرجى المحاولة مرة أخرى.', this.mainKeyboard)
+          await this.bot?.sendMessage(msg.chat.id, '⚠️ حدث خطأ أثناء تنفيذ الطلب.', this.mainKeyboard)
         } catch (e) {}
       }
     })
