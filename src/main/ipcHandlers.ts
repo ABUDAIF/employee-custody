@@ -11,6 +11,30 @@ import { ExcelGenerator } from '../services/excel/ExcelGenerator'
 import { getPermanentStorageDir, prisma } from '../services/db/prismaClient'
 import { AutoBackupService } from './autoBackup'
 
+function getBroadcastHistoryFilePath(): string {
+  return path.join(getPermanentStorageDir(), 'broadcast_history.json')
+}
+
+function getBroadcastHistory(): any[] {
+  try {
+    const file = getBroadcastHistoryFilePath()
+    if (fs.existsSync(file)) {
+      const content = fs.readFileSync(file, 'utf8')
+      return JSON.parse(content)
+    }
+  } catch {}
+  return []
+}
+
+function saveBroadcastHistory(history: any[]) {
+  try {
+    const file = getBroadcastHistoryFilePath()
+    fs.writeFileSync(file, JSON.stringify(history, null, 2), 'utf8')
+  } catch (e) {
+    console.error('Failed to save broadcast history:', e)
+  }
+}
+
 export function registerIpcHandlers() {
   // Employee Handlers
   ipcMain.handle('employee:getAll', async () => {
@@ -323,9 +347,14 @@ export function registerIpcHandlers() {
     }
 
     let targetEmployees: any[] = []
+    let targetTitle = 'جميع الموظفين المفعّلين'
+
     if (options.employeeId && options.employeeId !== 'ALL') {
       const emp = await prisma.employee.findUnique({ where: { id: options.employeeId } })
-      if (emp && emp.telegramId) targetEmployees.push(emp)
+      if (emp && emp.telegramId) {
+        targetEmployees.push(emp)
+        targetTitle = emp.name
+      }
     } else {
       targetEmployees = await prisma.employee.findMany({
         where: { telegramId: { not: null }, status: 'ACTIVE' }
@@ -338,6 +367,7 @@ export function registerIpcHandlers() {
 
     let successCount = 0
     let failCount = 0
+    const sentItems: Array<{ telegramId: string; messageId: number }> = []
 
     for (const emp of targetEmployees) {
       if (!emp.telegramId) continue
@@ -353,17 +383,88 @@ export function registerIpcHandlers() {
           })
         })
         const data: any = await res.json()
-        if (data.ok) successCount++
-        else failCount++
+        if (data.ok && data.result) {
+          successCount++
+          sentItems.push({ telegramId: emp.telegramId, messageId: data.result.message_id })
+        } else {
+          failCount++
+        }
       } catch {
         failCount++
       }
+    }
+
+    // Save Record to Broadcast History for Message Deletion Capabilities
+    if (sentItems.length > 0) {
+      const record = {
+        id: `broadcast_${Date.now()}`,
+        sentAt: new Date().toISOString(),
+        text: options.message,
+        target: targetTitle,
+        sentItems
+      }
+      const history = getBroadcastHistory()
+      history.unshift(record)
+      saveBroadcastHistory(history.slice(0, 50))
     }
 
     return {
       success: true,
       message: `تم إرسال الرسالة بنجاح إلى ${successCount} موظف${failCount > 0 ? ` (وفشل الإرسال لـ ${failCount})` : ''}.`,
       successCount,
+      failCount
+    }
+  })
+
+  // Get Telegram Broadcast History
+  ipcMain.handle('telegram:getBroadcastHistory', async () => {
+    return getBroadcastHistory()
+  })
+
+  // Delete / Revoke Telegram Sent Message for Everyone
+  ipcMain.handle('telegram:deleteBroadcastMessage', async (_, broadcastId: string) => {
+    const currentSettings = await settingsRepository.getSettings()
+    const token = currentSettings.telegramBotToken
+    if (!token) {
+      return { success: false, message: 'لم يتم تعيين Telegram Bot Token في الإعدادات.' }
+    }
+
+    const history = getBroadcastHistory()
+    const recordIndex = history.findIndex((h: any) => h.id === broadcastId)
+    if (recordIndex === -1) {
+      return { success: false, message: 'لم يتم العثور على سجل هذه الرسالة في الأرشيف.' }
+    }
+
+    const record = history[recordIndex]
+    let deletedCount = 0
+    let failCount = 0
+
+    for (const item of record.sentItems) {
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: item.telegramId,
+            message_id: item.messageId
+          })
+        })
+        const data: any = await res.json()
+        if (data.ok) deletedCount++
+        else failCount++
+      } catch {
+        failCount++
+      }
+    }
+
+    // Remove record from history after deletion attempt
+    history.splice(recordIndex, 1)
+    saveBroadcastHistory(history)
+
+    return {
+      success: true,
+      message: `تم حذف وسحب الرسالة بنجاح من هواتف ${deletedCount} موظف${failCount > 0 ? ` (وتعذر الحذف لـ ${failCount})` : ''}.`,
+      deletedCount,
       failCount
     }
   })
