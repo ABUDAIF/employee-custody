@@ -91,9 +91,11 @@ export function registerIpcHandlers() {
   ipcMain.handle('shell:openPath', async (_, relativeOrAbsolutePath: string, fileName?: string) => {
     const { shell } = await import('electron')
     let fullPath = relativeOrAbsolutePath
+    let isBase64 = false
 
     // Auto-reconstruct Base64 attachments uploaded from Telegram Cloud Bot
     if (relativeOrAbsolutePath && relativeOrAbsolutePath.startsWith('data:')) {
+      isBase64 = true
       try {
         const matches = relativeOrAbsolutePath.match(/^data:([^;]+);base64,(.+)$/)
         if (matches) {
@@ -110,6 +112,12 @@ export function registerIpcHandlers() {
         }
       } catch (e: any) {
         console.error('Failed to reconstruct Base64 attachment:', e)
+        return {
+          success: false,
+          isBase64: true,
+          fullPath: relativeOrAbsolutePath,
+          message: `خطأ في فك تشفير المرفق السحابي: ${e.message}`
+        }
       }
     } else if (!path.isAbsolute(fullPath)) {
       fullPath = path.join(getPermanentStorageDir(), relativeOrAbsolutePath)
@@ -117,9 +125,17 @@ export function registerIpcHandlers() {
 
     if (fs.existsSync(fullPath)) {
       await shell.openPath(fullPath)
-      return { success: true }
+      return { success: true, fullPath, isBase64 }
     } else {
-      return { success: false, message: 'الملف غير موجود على القرص المحلي.' }
+      return {
+        success: false,
+        isBase64,
+        fullPath,
+        dbPath: relativeOrAbsolutePath,
+        message: isBase64
+          ? 'تعذر بناء الملف السحابي على الجهاز.'
+          : `الملف غير موجود على هذا الجهاز. (مسار الداتابيز: ${relativeOrAbsolutePath} | المسار المستهدف على الجهاز: ${fullPath})`
+      }
     }
   })
 
