@@ -1,4 +1,4 @@
-// Standalone Cloud Telegram Bot Worker for Railway / Render (Runs 24/7 - v2.0.4 2026-08-06)
+// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.0.5 Active 2026-08-06)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
 const path = require('path')
@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:5432/postgres"
 
-console.log("🚀 Starting Standalone Cloud Telegram Bot 24/7 Service (v2.0.4 Active)...")
+console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.0.5...")
 
 const prisma = new PrismaClient({
   datasources: { db: { url: supabaseUrl } }
@@ -54,6 +54,21 @@ async function startBot() {
       const text = msg.text ? msg.text.trim() : ''
       const telegramName = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'موظف'
       const telegramUsername = msg.from?.username
+
+      if (text === '/test' || text === '/version') {
+        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.0.5 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '📞 اتصل بالحسابات الآن', url: 'tel:+201030324187' },
+                { text: '💬 تواصل عبر الواتساب', url: 'https://wa.me/201030324187' }
+              ]
+            ]
+          }
+        })
+        return
+      }
 
       // 1. Check employee activation status
       let employee = await prisma.employee.findUnique({ where: { telegramId } })
