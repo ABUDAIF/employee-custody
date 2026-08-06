@@ -15,7 +15,6 @@ const electronAPI = {
   createExpense: (data: any) => ipcRenderer.invoke('ledger:createExpense', data),
   getDashboardMetrics: () => ipcRenderer.invoke('ledger:getDashboardMetrics'),
   globalSearch: (query: string) => ipcRenderer.invoke('ledger:globalSearch', query),
-  generateQRCode: (opNo: string) => ipcRenderer.invoke('ledger:generateQRCode', opNo),
 
   // Activation Requests IPCs
   getPendingActivations: () => ipcRenderer.invoke('activation:getPending'),
@@ -42,7 +41,7 @@ const electronAPI = {
   restoreBackup: (fileName: string) => ipcRenderer.invoke('backup:restore', fileName),
 
   // File Shell IPCs
-  openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
+  openPath: (path: string, fileName?: string) => ipcRenderer.invoke('shell:openPath', path, fileName),
 
   // Event Listeners (Event Bus to React UI)
   on: (channel: string, callback: (...args: any[]) => void) => {

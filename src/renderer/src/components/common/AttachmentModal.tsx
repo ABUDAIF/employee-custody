@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaTimes, FaFileAlt, FaFileImage, FaExternalLinkAlt, FaFolderOpen } from 'react-icons/fa'
+import { FaTimes, FaFileAlt, FaFileImage, FaFolderOpen } from 'react-icons/fa'
 
 interface Attachment {
   id: string
@@ -26,7 +26,7 @@ export const AttachmentModal: React.FC<AttachmentModalProps> = ({ isOpen, attach
     try {
       setOpening(att.id)
       setErrorMsg(null)
-      const res = await window.electronAPI.openPath(att.filePath)
+      const res = await window.electronAPI.openPath(att.filePath, att.fileName)
       if (!res.success) {
         setErrorMsg(`⚠️ ${res.message || 'لم نتمكن من فتح الملف تلقائياً.'}`)
       }
