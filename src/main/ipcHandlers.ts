@@ -93,7 +93,7 @@ export function registerIpcHandlers() {
     let fullPath = relativeOrAbsolutePath
     let isBase64 = false
 
-    // Auto-reconstruct Base64 attachments uploaded from Telegram Cloud Bot
+    // 1. Auto-reconstruct Base64 attachments uploaded from Telegram Cloud Bot
     if (relativeOrAbsolutePath && relativeOrAbsolutePath.startsWith('data:')) {
       isBase64 = true
       try {
@@ -120,7 +120,21 @@ export function registerIpcHandlers() {
         }
       }
     } else if (!path.isAbsolute(fullPath)) {
-      fullPath = path.join(getPermanentStorageDir(), relativeOrAbsolutePath)
+      // Clean duplicate "storage/" prefix to fix double storage path duplication
+      const cleanRelPath = relativeOrAbsolutePath.replace(/^storage[/\\]/i, '')
+      fullPath = path.join(getPermanentStorageDir(), cleanRelPath)
+    }
+
+    // Candidate fallback paths if path doesn't exist
+    if (!fs.existsSync(fullPath)) {
+      const baseUserDir = path.dirname(getPermanentStorageDir())
+      const altPath1 = path.join(baseUserDir, relativeOrAbsolutePath)
+      const altPath2 = path.join(getPermanentStorageDir(), 'receipts', path.basename(relativeOrAbsolutePath))
+      const altPath3 = path.join(getPermanentStorageDir(), path.basename(relativeOrAbsolutePath))
+
+      if (fs.existsSync(altPath1)) fullPath = altPath1
+      else if (fs.existsSync(altPath2)) fullPath = altPath2
+      else if (fs.existsSync(altPath3)) fullPath = altPath3
     }
 
     if (fs.existsSync(fullPath)) {
