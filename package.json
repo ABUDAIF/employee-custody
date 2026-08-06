@@ -5,6 +5,7 @@
   "main": "dist-electron/main/index.js",
   "type": "commonjs",
   "scripts": {
+    "start": "node scripts/standalone-bot.js",
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
