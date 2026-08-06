@@ -41,16 +41,24 @@ export function registerIpcHandlers() {
     return await ledgerRepository.getAllEntries(options)
   })
 
-  ipcMain.handle('ledger:getTimeline', async (_, employeeId: string) => {
+  ipcMain.handle('ledger:getEmployeeTimeline', async (_, employeeId: string) => {
     return await ledgerRepository.getEmployeeTimeline(employeeId)
   })
 
-  ipcMain.handle('ledger:addCustody', async (_, data: any) => {
-    return await ledgerRepository.addCustody(data)
+  ipcMain.handle('ledger:createDeposit', async (_, data: any) => {
+    return await ledgerRepository.createDeposit(data)
   })
 
   ipcMain.handle('ledger:createExpense', async (_, data: any) => {
     return await ledgerRepository.createExpense(data)
+  })
+
+  ipcMain.handle('ledger:getDashboardMetrics', async () => {
+    return await ledgerRepository.getDashboardMetrics()
+  })
+
+  ipcMain.handle('ledger:globalSearch', async (_, query: string) => {
+    return await ledgerRepository.globalSearch(query)
   })
 
   ipcMain.handle('ledger:addAdjustment', async (_, data: any) => {
@@ -188,16 +196,16 @@ export function registerIpcHandlers() {
     return res
   })
 
-  // Backup & Restore Handlers
-  ipcMain.handle('system:createBackup', async () => {
+  // Backup IPCs
+  ipcMain.handle('backup:create', async () => {
     return await settingsRepository.createBackup()
   })
 
-  ipcMain.handle('system:getBackupList', async () => {
+  ipcMain.handle('backup:getList', async () => {
     return await settingsRepository.getBackupList()
   })
 
-  ipcMain.handle('system:restoreBackup', async (_, fileName: string) => {
+  ipcMain.handle('backup:restore', async (_, fileName: string) => {
     return await settingsRepository.restoreBackup(fileName)
   })
 }
