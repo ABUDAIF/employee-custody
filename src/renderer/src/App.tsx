@@ -10,6 +10,7 @@ import { LedgerPage } from './pages/Ledger/LedgerPage'
 import { ReportsPage } from './pages/Reports/ReportsPage'
 import { MonthClosePage } from './pages/MonthClose/MonthClosePage'
 import { SettingsPage } from './pages/Settings/SettingsPage'
+import { UpdateNotificationModal } from './components/common/UpdateNotificationModal'
 
 import './styles/tokens.css'
 import './styles/components.css'
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
+        <UpdateNotificationModal />
       </div>
     </Router>
   )

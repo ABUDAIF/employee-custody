@@ -27,6 +27,7 @@ import { eventBus } from './eventBus'
 import { telegramBotService } from '../services/telegram/botService'
 import { AutoBackupService } from './autoBackup'
 import { autoOffloaderService } from '../services/storage/AutoOffloaderService'
+import { initAutoUpdater } from './autoUpdater'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -103,6 +104,14 @@ app.whenReady().then(async () => {
   }
 
   await createWindow()
+
+  if (mainWindow) {
+    try {
+      initAutoUpdater(mainWindow)
+    } catch (err) {
+      console.error('Auto Updater initialization warning:', err)
+    }
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

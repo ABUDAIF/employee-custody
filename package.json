@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
+    "electron-updater": "^6.3.9",
     "exceljs": "^4.4.0",
     "framer-motion": "^10.18.0",
     "html5-qrcode": "^2.3.8",
@@ -48,6 +49,13 @@
   "build": {
     "appId": "com.employeecustody.app",
     "productName": "employee-custody-app",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ABUDAIF",
+        "repo": "employee-custody"
+      }
+    ],
     "directories": {
       "output": "release"
     },
