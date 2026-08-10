@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FaExchangeAlt, FaQrcode, FaPaperclip, FaFilter, FaChevronRight, FaChevronLeft } from 'react-icons/fa'
+import { FaExchangeAlt, FaQrcode, FaPaperclip, FaFilter, FaChevronRight, FaChevronLeft, FaSearch } from 'react-icons/fa'
 import { useLedgerStore } from '../../stores/useLedgerStore'
 import { QRModal } from '../../components/common/QRModal'
 import { CopyableOpNo } from '../../components/common/CopyableOpNo'
@@ -9,6 +9,7 @@ import { AttachmentModal } from '../../components/common/AttachmentModal'
 export const LedgerPage: React.FC = () => {
   const { entries, totalEntries, totalPages, loading, fetchEntries } = useLedgerStore()
   const [filterType, setFilterType] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState<string>('')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [pageSize, setPageSize] = useState<number>(20)
   const [selectedOpNo, setSelectedOpNo] = useState<string | null>(null)
@@ -16,11 +17,23 @@ export const LedgerPage: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [filterType, pageSize])
+  }, [filterType, pageSize, searchQuery])
 
   useEffect(() => {
     fetchEntries({ page: currentPage, limit: pageSize, type: filterType || undefined })
   }, [currentPage, pageSize, filterType])
+
+  const filteredEntries = entries.filter((item) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.trim().toLowerCase()
+    return (
+      item.operationNo?.toLowerCase().includes(q) ||
+      item.description?.toLowerCase().includes(q) ||
+      item.category?.toLowerCase().includes(q) ||
+      item.employee?.name?.toLowerCase().includes(q) ||
+      String(item.amount).includes(q)
+    )
+  })
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -32,8 +45,20 @@ export const LedgerPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Filter Chips & Page Size */}
+        {/* Search Bar & Filter Chips */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ position: 'relative', width: '280px' }}>
+            <FaSearch style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} size={13} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingRight: '36px', paddingLeft: '12px', fontSize: '13px', width: '100%' }}
+              placeholder="بحث برقم العملية، اسم الموظف، البيان، أو المبلغ..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <FaFilter color="var(--text-dim)" size={14} />
             <select
@@ -67,7 +92,7 @@ export const LedgerPage: React.FC = () => {
       <div className="card">
         {loading ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px' }}>جاري تحميل الدفتر...</p>
-        ) : entries.length === 0 ? (
+        ) : filteredEntries.length === 0 ? (
           <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '40px' }}>لا توجد قيود مسجلة تطابق تصفية البحث.</p>
         ) : (
           <>
@@ -86,7 +111,7 @@ export const LedgerPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((entry) => {
+                  {filteredEntries.map((entry) => {
                     const isDeposit = entry.type === 'DEPOSIT' || entry.type === 'OPENING_BALANCE'
                     const dateStr = new Date(entry.date).toLocaleString('ar-EG', {
                       year: 'numeric',

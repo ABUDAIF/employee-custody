@@ -10,7 +10,8 @@ import {
   FaPaperclip,
   FaCommentDots,
   FaSpinner,
-  FaTimes
+  FaTimes,
+  FaSearch
 } from 'react-icons/fa'
 import { CopyableOpNo } from '../../components/common/CopyableOpNo'
 import { AttachmentModal } from '../../components/common/AttachmentModal'
@@ -19,6 +20,7 @@ export const RefundRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [statusFilter, setStatusFilter] = useState<string>('PENDING')
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   const [activeAttachments, setActiveAttachments] = useState<any[] | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
@@ -83,6 +85,19 @@ export const RefundRequestsPage: React.FC = () => {
 
   const pendingCount = requests.filter((r) => r.status === 'PENDING').length
 
+  const filteredRequests = requests.filter((req) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.trim().toLowerCase()
+    return (
+      req.requestNo?.toLowerCase().includes(q) ||
+      req.operationNo?.toLowerCase().includes(q) ||
+      req.employee?.name?.toLowerCase().includes(q) ||
+      req.reason?.toLowerCase().includes(q) ||
+      req.ledgerEntry?.description?.toLowerCase().includes(q) ||
+      String(req.amount).includes(q)
+    )
+  })
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       {/* Top Header */}
@@ -96,48 +111,62 @@ export const RefundRequestsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Status Filter Tabs */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            className={`btn ${statusFilter === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('PENDING')}
-            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <FaHourglassHalf color={statusFilter === 'PENDING' ? '#fff' : '#facc15'} />
-            الطلبات المعلقة ({pendingCount})
-          </button>
-          <button
-            className={`btn ${statusFilter === 'APPROVED' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('APPROVED')}
-            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <FaCheckCircle color={statusFilter === 'APPROVED' ? '#fff' : '#4ade80'} />
-            تم استرداد قيمتها
-          </button>
-          <button
-            className={`btn ${statusFilter === 'REJECTED' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setStatusFilter('REJECTED')}
-            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <FaTimesCircle color={statusFilter === 'REJECTED' ? '#fff' : '#ef4444'} />
-            طلبات مرفوضة
-          </button>
+        {/* Search Bar & Status Filter Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ position: 'relative', width: '260px' }}>
+            <FaSearch style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} size={13} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingRight: '36px', paddingLeft: '12px', fontSize: '13px', width: '100%' }}
+              placeholder="بحث برقم العملية، الموظف، السبب، أو المبلغ..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className={`btn ${statusFilter === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setStatusFilter('PENDING')}
+              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FaHourglassHalf color={statusFilter === 'PENDING' ? '#fff' : '#facc15'} />
+              الطلبات المعلقة ({pendingCount})
+            </button>
+            <button
+              className={`btn ${statusFilter === 'APPROVED' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setStatusFilter('APPROVED')}
+              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FaCheckCircle color={statusFilter === 'APPROVED' ? '#fff' : '#4ade80'} />
+              تم استرداد قيمتها
+            </button>
+            <button
+              className={`btn ${statusFilter === 'REJECTED' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setStatusFilter('REJECTED')}
+              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FaTimesCircle color={statusFilter === 'REJECTED' ? '#fff' : '#ef4444'} />
+              طلبات مرفوضة
+            </button>
+          </div>
         </div>
       </div>
 
       {loading ? (
         <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px' }}>جاري تحميل طلبات الاسترداد...</p>
-      ) : requests.length === 0 ? (
+      ) : filteredRequests.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
           <FaUndoAlt size={48} color="var(--border-subtle)" style={{ marginBottom: '16px' }} />
-          <h3 style={{ fontSize: '16px', fontWeight: 'bold' }}>لا توجد طلبات استرداد في هذه الفئة حالياً.</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold' }}>لا توجد طلبات استرداد تطابق تصفية البحث.</h3>
           <p style={{ fontSize: '12px', marginTop: '6px' }}>
             يمكن للموظفين تقديم طلب استرداد لأي عملية مصروف من خلال زر البوت التفاعلي (🔄 طلب استرداد).
           </p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
-          {requests.map((req) => {
+          {filteredRequests.map((req) => {
             const isPending = req.status === 'PENDING'
             const isApproved = req.status === 'APPROVED'
             const dateStr = new Date(req.createdAt).toLocaleString('ar-EG', {

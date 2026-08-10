@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa'
 import { useActivationStore } from '../../stores/useActivationStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import { HeaderNotificationCenter } from './HeaderNotificationCenter'
 
 export const Sidebar: React.FC = () => {
   const { pendingRequests, fetchPending } = useActivationStore()
@@ -67,7 +68,7 @@ export const Sidebar: React.FC = () => {
   return (
     <aside
       style={{
-        width: '260px',
+        width: '270px',
         backgroundColor: 'var(--bg-surface)',
         borderLeft: '1px solid var(--border-subtle)',
         display: 'flex',
@@ -76,31 +77,36 @@ export const Sidebar: React.FC = () => {
         padding: '24px 16px'
       }}
     >
-      {/* Brand Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 12px 24px 12px' }}>
-        <div
-          style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: 'var(--radius-md)',
-            background: 'var(--accent-brand-gradient)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            fontWeight: 'bold',
-            fontSize: '18px',
-            boxShadow: 'var(--shadow-glow-brand)'
-          }}
-        >
-          ع
+      {/* Brand Header & Top Notification Center */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px 24px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--accent-brand-gradient)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 'bold',
+              fontSize: '18px',
+              boxShadow: 'var(--shadow-glow-brand)'
+            }}
+          >
+            ع
+          </div>
+          <div>
+            <h2 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-main)' }}>
+              {settings?.companyName || 'نظام العهد المالية'}
+            </h2>
+            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>إدارة العهد والمصروفات</span>
+          </div>
         </div>
-        <div>
-          <h2 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-main)' }}>
-            {settings?.companyName || 'نظام العهد المالية'}
-          </h2>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>إدارة العهد والمصروفات</span>
-        </div>
+
+        {/* Bell Notification Dropdown */}
+        <HeaderNotificationCenter />
       </div>
 
       {/* Navigation Links */}

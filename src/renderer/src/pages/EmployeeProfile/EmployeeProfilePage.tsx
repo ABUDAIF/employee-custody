@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FaArrowRight, FaPhone, FaCheckCircle, FaHourglassHalf, FaPlusCircle, FaQrcode, FaPaperclip } from 'react-icons/fa'
+import { FaArrowRight, FaPhone, FaCheckCircle, FaHourglassHalf, FaPlusCircle, FaQrcode, FaPaperclip, FaSearch } from 'react-icons/fa'
 import { useEmployeeStore } from '../../stores/useEmployeeStore'
 import { useLedgerStore } from '../../stores/useLedgerStore'
 import { DepositModal } from '../../components/common/DepositModal'
@@ -19,6 +19,7 @@ export const EmployeeProfilePage: React.FC = () => {
   const [isDepositOpen, setIsDepositOpen] = useState(false)
   const [selectedOpNo, setSelectedOpNo] = useState<string | null>(null)
   const [activeAttachments, setActiveAttachments] = useState<any[] | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   useEffect(() => {
     if (id) {
@@ -32,6 +33,17 @@ export const EmployeeProfilePage: React.FC = () => {
   }
 
   const isActivated = selectedEmployee.status === 'ACTIVE'
+
+  const filteredTimeline = timeline.filter((item) => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.trim().toLowerCase()
+    return (
+      item.operationNo?.toLowerCase().includes(q) ||
+      item.description?.toLowerCase().includes(q) ||
+      item.category?.toLowerCase().includes(q) ||
+      String(item.amount).includes(q)
+    )
+  })
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -134,15 +146,29 @@ export const EmployeeProfilePage: React.FC = () => {
 
       {/* Bank Statement Visual Timeline */}
       <div className="card">
-        <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          📑 كشف الحساب والتايم لاين (Bank Statement Timeline)
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📑 كشف الحساب والتايم لاين (Bank Statement Timeline)
+          </h2>
 
-        {timeline.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px' }}>لا توجد حركات عهدة أو مصروفات مسجلة لهذا الموظف بعد.</p>
+          <div style={{ position: 'relative', width: '280px' }}>
+            <FaSearch style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} size={13} />
+            <input
+              type="text"
+              className="form-input"
+              style={{ paddingRight: '36px', paddingLeft: '12px', fontSize: '13px', width: '100%' }}
+              placeholder="بحث برقم العملية، البيان، الفئة، أو المبلغ..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {filteredTimeline.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px' }}>لا توجد حركات مسجلة تطابق تصفية البحث.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {timeline.map((item) => {
+            {filteredTimeline.map((item) => {
               const isDeposit = item.type === 'DEPOSIT' || item.type === 'OPENING_BALANCE'
               const dateStr = new Date(item.date).toLocaleString('ar-EG', {
                 weekday: 'short',
