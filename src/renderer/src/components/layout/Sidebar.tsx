@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   FaChartPie,
@@ -7,7 +7,8 @@ import {
   FaExchangeAlt,
   FaFileExcel,
   FaCalendarCheck,
-  FaCog
+  FaCog,
+  FaUndoAlt
 } from 'react-icons/fa'
 import { useActivationStore } from '../../stores/useActivationStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -15,11 +16,13 @@ import { useSettingsStore } from '../../stores/useSettingsStore'
 export const Sidebar: React.FC = () => {
   const { pendingRequests, fetchPending } = useActivationStore()
   const { settings, botStatus, fetchSettings, fetchBotStatus } = useSettingsStore()
+  const [refundPendingCount, setRefundPendingCount] = useState<number>(0)
 
   useEffect(() => {
     fetchPending()
     fetchSettings()
     fetchBotStatus()
+    fetchRefundPendingCount()
 
     // Listen to real-time activation requests
     const unsubscribeActivation = window.electronAPI.on('activation:new_request', () => {
@@ -36,6 +39,15 @@ export const Sidebar: React.FC = () => {
       unsubscribeBot()
     }
   }, [])
+
+  const fetchRefundPendingCount = async () => {
+    try {
+      if ((window.electronAPI as any).getRefundPendingCount) {
+        const count = await (window.electronAPI as any).getRefundPendingCount()
+        setRefundPendingCount(count || 0)
+      }
+    } catch {}
+  }
 
   const pendingCount = pendingRequests.filter(
     (r: any) => r.status === 'PENDING' || r.status === 'CODE_GENERATED'
@@ -159,6 +171,42 @@ export const Sidebar: React.FC = () => {
         </NavLink>
 
         <NavLink
+          to="/refunds"
+          style={({ isActive }) => ({
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            color: isActive ? '#ffffff' : 'var(--text-muted)',
+            backgroundColor: isActive ? 'var(--accent-brand)' : 'transparent',
+            textDecoration: 'none',
+            fontWeight: '600',
+            fontSize: '14px',
+            transition: 'var(--transition-fast)'
+          })}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <FaUndoAlt size={18} />
+            طلبات الاسترداد
+          </div>
+          {refundPendingCount > 0 && (
+            <span
+              style={{
+                background: 'var(--accent-danger)',
+                color: '#fff',
+                borderRadius: 'var(--radius-full)',
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: 'bold'
+              }}
+            >
+              {refundPendingCount}
+            </span>
+          )}
+        </NavLink>
+
+        <NavLink
           to="/ledger"
           style={({ isActive }) => ({
             display: 'flex',
@@ -249,7 +297,7 @@ export const Sidebar: React.FC = () => {
           gap: '4px'
         }}
       >
-        <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>الإصدار: v2.0 Commercial Ledger</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>الإصدار: v2.1 Commercial Ledger</span>
         <span
           style={{
             fontSize: '11px',

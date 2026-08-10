@@ -204,7 +204,7 @@ export class LedgerRepository {
   }) {
     try {
       const page = options?.page || 1
-      const limit = options?.limit || 50
+      const limit = options?.limit || 20
       const skip = (page - 1) * limit
 
       const where: any = {}

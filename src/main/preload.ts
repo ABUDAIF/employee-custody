@@ -16,6 +16,12 @@ const electronAPI = {
   getDashboardMetrics: () => ipcRenderer.invoke('ledger:getDashboardMetrics'),
   globalSearch: (query: string) => ipcRenderer.invoke('ledger:globalSearch', query),
 
+  // Refund Requests IPCs
+  getAllRefundRequests: (status?: string) => ipcRenderer.invoke('refund:getAll', status),
+  getRefundPendingCount: () => ipcRenderer.invoke('refund:getPendingCount'),
+  processRefundRequest: (data: any) => ipcRenderer.invoke('refund:process', data),
+  createRefundRequest: (data: any) => ipcRenderer.invoke('refund:create', data),
+
   // Activation Requests IPCs
   getPendingActivations: () => ipcRenderer.invoke('activation:getPending'),
   generateOtpCode: (requestId: string, employeeId: string) => ipcRenderer.invoke('activation:generateOtp', requestId, employeeId),

@@ -4,6 +4,7 @@ import fs from 'fs'
 import { employeeRepository } from '../services/repositories/EmployeeRepository'
 import { activationRepository } from '../services/repositories/ActivationRepository'
 import { ledgerRepository } from '../services/repositories/LedgerRepository'
+import { refundRepository } from '../services/repositories/RefundRepository'
 import { monthCloseRepository } from '../services/repositories/MonthCloseRepository'
 import { settingsRepository } from '../services/repositories/SettingsRepository'
 import { telegramBotService } from '../services/telegram/botService'
@@ -96,6 +97,23 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('ledger:deleteAttachment', async (_, attachmentId: string) => {
     return await ledgerRepository.deleteAttachment(attachmentId)
+  })
+
+  // Refund Requests Handlers
+  ipcMain.handle('refund:getAll', async (_, status?: string) => {
+    return await refundRepository.getAllRefundRequests(status)
+  })
+
+  ipcMain.handle('refund:getPendingCount', async () => {
+    return await refundRepository.getPendingCount()
+  })
+
+  ipcMain.handle('refund:process', async (_, data: any) => {
+    return await refundRepository.processRefundRequest(data)
+  })
+
+  ipcMain.handle('refund:create', async (_, data: any) => {
+    return await refundRepository.createRefundRequest(data)
   })
 
   // Attachment Direct Base64 & SaveAs Handlers
@@ -467,7 +485,7 @@ export function registerIpcHandlers() {
     }
   })
 
-  // Sweep and Delete Recent Telegram Messages (For messages sent before archive was added)
+  // Sweep and Delete Recent Telegram Messages
   ipcMain.handle('telegram:sweepAndDeleteMessages', async (_, count: number = 30) => {
     const currentSettings = await settingsRepository.getSettings()
     const token = currentSettings.telegramBotToken
@@ -485,7 +503,6 @@ export function registerIpcHandlers() {
 
     let totalDeleted = 0
 
-    // Sweep recent 100 message IDs for each employee
     for (const emp of employees) {
       if (!emp.telegramId) continue
       for (let msgId = 1; msgId <= count; msgId++) {

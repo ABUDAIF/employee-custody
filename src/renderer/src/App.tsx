@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { EmployeesPage } from './pages/Employees/EmployeesPage'
 import { EmployeeProfilePage } from './pages/EmployeeProfile/EmployeeProfilePage'
 import { ActivationRequestsPage } from './pages/ActivationRequests/ActivationRequestsPage'
+import { RefundRequestsPage } from './pages/RefundRequests/RefundRequestsPage'
 import { LedgerPage } from './pages/Ledger/LedgerPage'
 import { ReportsPage } from './pages/Reports/ReportsPage'
 import { MonthClosePage } from './pages/MonthClose/MonthClosePage'
@@ -26,6 +27,7 @@ export const App: React.FC = () => {
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/employees/:id" element={<EmployeeProfilePage />} />
             <Route path="/activations" element={<ActivationRequestsPage />} />
+            <Route path="/refunds" element={<RefundRequestsPage />} />
             <Route path="/ledger" element={<LedgerPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/month-close" element={<MonthClosePage />} />
