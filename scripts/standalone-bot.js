@@ -1,4 +1,4 @@
-// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.1.0 Active 2026-08-10)
+// Standalone Cloud Telegram Bot Worker for Railway / Render (v2.1.1 Active 2026-08-10)
 const { PrismaClient } = require('@prisma/client')
 const TelegramBot = require('node-telegram-bot-api')
 const path = require('path')
@@ -6,7 +6,7 @@ const fs = require('fs')
 
 const supabaseUrl = process.env.DATABASE_URL || "postgresql://postgres.rhvzptjnvzthormqxnkc:01150823229Ad@aws-1-eu-west-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
 
-console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.1.0 (Refund Requests Active)...")
+console.log("🚀 Starting Standalone Cloud Telegram Bot Worker v2.1.1 (Base64 & Refund Requests Active)...")
 
 const prisma = new PrismaClient({
   datasources: { db: { url: supabaseUrl } }
@@ -58,7 +58,7 @@ async function startBot() {
 
       // Global Test / Version command
       if (text === '/test' || text === '/version') {
-        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.1.0 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
+        await bot.sendMessage(chatId, `✅ **البوت يعمل بـ التحديث الجديد v2.1.1 بنجاح!**\n📞 **رقم المحاسب:** \`01030324187\``, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
@@ -311,42 +311,53 @@ async function startBot() {
 
       // Handle Awaiting Refund Reason Step
       if (session && session.step === 'AWAITING_REFUND_REASON') {
-        const entry = session.ledgerEntry
-        const reason = text
-
-        const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-        const countToday = await prisma.refundRequest.count({
-          where: { requestNo: { startsWith: `REF${todayStr}` } }
-        })
-        const seq = (countToday + 1).toString().padStart(6, '0')
-        const requestNo = `REF${todayStr}${seq}`
-
-        await prisma.refundRequest.create({
-          data: {
-            requestNo,
-            employeeId: employee.id,
-            ledgerEntryId: entry.id,
-            operationNo: entry.operationNo,
-            amount: entry.amount,
-            reason,
-            status: 'PENDING'
+        try {
+          const entry = session.ledgerEntry
+          if (!entry || !entry.id) {
+            userSessions.delete(telegramId)
+            await bot.sendMessage(chatId, '⚠️ تعذر العثور على بيانات العملية. يرجى البدء من جديد بضغط زر (🔄 طلب استرداد).', mainKeyboard)
+            return
           }
-        })
 
-        userSessions.delete(telegramId)
+          const reason = text || 'بدون سبب مدوّن'
+          const requestNo = `REF${Date.now()}`
 
-        await bot.sendMessage(
-          chatId,
-          `🎉 **تم إرسال طلب الاسترداد بنجاح!**\n\n` +
-            `🔢 **رقم طلب الاسترداد:** \`${requestNo}\`\n` +
-            `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
-            `💰 **المبلغ المطلوب إرجاعه:** ${entry.amount.toLocaleString('ar-EG')} ج.م\n` +
-            `📝 **سببك:** ${reason}\n\n` +
-            `⏳ **الحالة:** قيد المراجعة لدى المحاسب.\n` +
-            `سيتم مراجعة العملية وإشعارك فوراً بالقرار وإعادة المبلغ لرصيدك.`,
-          { parse_mode: 'Markdown', ...mainKeyboard }
-        )
-        return
+          const createdRefund = await prisma.refundRequest.create({
+            data: {
+              requestNo,
+              employeeId: employee.id,
+              ledgerEntryId: entry.id,
+              operationNo: entry.operationNo,
+              amount: entry.amount,
+              reason,
+              status: 'PENDING'
+            }
+          })
+
+          userSessions.delete(telegramId)
+
+          await bot.sendMessage(
+            chatId,
+            `🎉 **تم إرسال طلب الاسترداد بنجاح!**\n\n` +
+              `🔢 **رقم طلب الاسترداد:** \`${createdRefund.requestNo}\`\n` +
+              `🔢 **رقم العملية:** \`${entry.operationNo}\`\n` +
+              `💰 **المبلغ المطلوب إرجاعه:** ${entry.amount.toLocaleString('ar-EG')} ج.م\n` +
+              `📝 **السبب:** ${reason}\n\n` +
+              `⏳ **الحالة:** قيد المراجعة لدى المحاسب.\n` +
+              `سيتم مراجعة الطلب وإشعارك فوراً بالقرار وإعادة المبلغ لرصيدك.`,
+            { parse_mode: 'Markdown', ...mainKeyboard }
+          )
+          return
+        } catch (refundErr) {
+          console.error('Refund creation error:', refundErr)
+          userSessions.delete(telegramId)
+          await bot.sendMessage(
+            chatId,
+            `⚠️ **تعذر تسجيل الطلب حالياً:** ${refundErr.message || 'يرجى المحاولة مرة أخرى.'}`,
+            mainKeyboard
+          )
+          return
+        }
       }
 
       // Handle Add Expense Trigger
