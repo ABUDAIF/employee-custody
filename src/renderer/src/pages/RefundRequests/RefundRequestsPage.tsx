@@ -8,19 +8,16 @@ import {
   FaUser,
   FaPhone,
   FaPaperclip,
-  FaCommentDots,
   FaSpinner,
-  FaTimes,
-  FaSearch
+  FaTimes
 } from 'react-icons/fa'
 import { CopyableOpNo } from '../../components/common/CopyableOpNo'
 import { AttachmentModal } from '../../components/common/AttachmentModal'
 
 export const RefundRequestsPage: React.FC = () => {
-  const [requests, setRequests] = useState<any[]>([])
+  const [allRequests, setAllRequests] = useState<any[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [statusFilter, setStatusFilter] = useState<string>('PENDING')
-  const [searchQuery, setSearchQuery] = useState<string>('')
 
   const [activeAttachments, setActiveAttachments] = useState<any[] | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null)
@@ -31,13 +28,14 @@ export const RefundRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchRequests()
-  }, [statusFilter])
+  }, [])
 
   const fetchRequests = async () => {
     setLoading(true)
     try {
-      const data = await (window.electronAPI as any).getAllRefundRequests(statusFilter || undefined)
-      setRequests(data || [])
+      // Fetch all refund requests to get accurate counts for all 3 buttons
+      const data = await (window.electronAPI as any).getAllRefundRequests()
+      setAllRequests(data || [])
     } catch (err) {
       console.error('Failed to fetch refund requests:', err)
     } finally {
@@ -83,20 +81,11 @@ export const RefundRequestsPage: React.FC = () => {
     }
   }
 
-  const pendingCount = requests.filter((r) => r.status === 'PENDING').length
+  const pendingCount = allRequests.filter((r) => r.status === 'PENDING').length
+  const approvedCount = allRequests.filter((r) => r.status === 'APPROVED').length
+  const rejectedCount = allRequests.filter((r) => r.status === 'REJECTED').length
 
-  const filteredRequests = requests.filter((req) => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.trim().toLowerCase()
-    return (
-      req.requestNo?.toLowerCase().includes(q) ||
-      req.operationNo?.toLowerCase().includes(q) ||
-      req.employee?.name?.toLowerCase().includes(q) ||
-      req.reason?.toLowerCase().includes(q) ||
-      req.ledgerEntry?.description?.toLowerCase().includes(q) ||
-      String(req.amount).includes(q)
-    )
-  })
+  const filteredRequests = allRequests.filter((req) => req.status === statusFilter)
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -111,46 +100,32 @@ export const RefundRequestsPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Search Bar & Status Filter Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ position: 'relative', width: '260px' }}>
-            <FaSearch style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} size={13} />
-            <input
-              type="text"
-              className="form-input"
-              style={{ paddingRight: '36px', paddingLeft: '12px', fontSize: '13px', width: '100%' }}
-              placeholder="بحث برقم العملية، الموظف، السبب، أو المبلغ..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              className={`btn ${statusFilter === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setStatusFilter('PENDING')}
-              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <FaHourglassHalf color={statusFilter === 'PENDING' ? '#fff' : '#facc15'} />
-              الطلبات المعلقة ({pendingCount})
-            </button>
-            <button
-              className={`btn ${statusFilter === 'APPROVED' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setStatusFilter('APPROVED')}
-              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <FaCheckCircle color={statusFilter === 'APPROVED' ? '#fff' : '#4ade80'} />
-              تم استرداد قيمتها
-            </button>
-            <button
-              className={`btn ${statusFilter === 'REJECTED' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setStatusFilter('REJECTED')}
-              style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <FaTimesCircle color={statusFilter === 'REJECTED' ? '#fff' : '#ef4444'} />
-              طلبات مرفوضة
-            </button>
-          </div>
+        {/* Status Filter Tabs with Operation Counts */}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            className={`btn ${statusFilter === 'PENDING' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setStatusFilter('PENDING')}
+            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px' }}
+          >
+            <FaHourglassHalf color={statusFilter === 'PENDING' ? '#fff' : '#facc15'} />
+            الطلبات المعلقة ({pendingCount})
+          </button>
+          <button
+            className={`btn ${statusFilter === 'APPROVED' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setStatusFilter('APPROVED')}
+            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px' }}
+          >
+            <FaCheckCircle color={statusFilter === 'APPROVED' ? '#fff' : '#4ade80'} />
+            تم استرداد قيمتها ({approvedCount})
+          </button>
+          <button
+            className={`btn ${statusFilter === 'REJECTED' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setStatusFilter('REJECTED')}
+            style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px' }}
+          >
+            <FaTimesCircle color={statusFilter === 'REJECTED' ? '#fff' : '#ef4444'} />
+            طلبات مرفوضة ({rejectedCount})
+          </button>
         </div>
       </div>
 
@@ -159,7 +134,7 @@ export const RefundRequestsPage: React.FC = () => {
       ) : filteredRequests.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
           <FaUndoAlt size={48} color="var(--border-subtle)" style={{ marginBottom: '16px' }} />
-          <h3 style={{ fontSize: '16px', fontWeight: 'bold' }}>لا توجد طلبات استرداد تطابق تصفية البحث.</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold' }}>لا توجد طلبات استرداد في هذه الفئة حالياً.</h3>
           <p style={{ fontSize: '12px', marginTop: '6px' }}>
             يمكن للموظفين تقديم طلب استرداد لأي عملية مصروف من خلال زر البوت التفاعلي (🔄 طلب استرداد).
           </p>

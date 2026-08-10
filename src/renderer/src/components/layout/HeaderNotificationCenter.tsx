@@ -178,7 +178,7 @@ export const HeaderNotificationCenter: React.FC = () => {
         )}
       </button>
 
-      {/* Popover Dropdown */}
+      {/* Popover Dropdown positioned to stay cleanly inside application bounds */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -189,14 +189,14 @@ export const HeaderNotificationCenter: React.FC = () => {
             style={{
               position: 'absolute',
               top: '48px',
-              left: 0,
-              width: '360px',
-              maxHeight: '480px',
+              right: 0,
+              width: '320px',
+              maxHeight: '440px',
               backgroundColor: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
               borderRadius: 'var(--radius-lg)',
-              boxShadow: '0 12px 36px rgba(0, 0, 0, 0.4)',
-              zIndex: 9999,
+              boxShadow: '0 12px 36px rgba(0, 0, 0, 0.5)',
+              zIndex: 99999,
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden'
@@ -213,7 +213,7 @@ export const HeaderNotificationCenter: React.FC = () => {
                 background: 'var(--bg-surface-hover)'
               }}
             >
-              <h4 style={{ fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h4 style={{ fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaBell color="#60a5fa" /> الإشعارات والتنبيهات الحية
               </h4>
               <div style={{ display: 'flex', gap: '8px' }}>
