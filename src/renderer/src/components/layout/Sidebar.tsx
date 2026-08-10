@@ -18,6 +18,15 @@ export const Sidebar: React.FC = () => {
   const { settings, botStatus, fetchSettings, fetchBotStatus } = useSettingsStore()
   const [refundPendingCount, setRefundPendingCount] = useState<number>(0)
 
+  const fetchRefundPendingCount = async () => {
+    try {
+      if ((window.electronAPI as any).getRefundPendingCount) {
+        const count = await (window.electronAPI as any).getRefundPendingCount()
+        setRefundPendingCount(count || 0)
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     fetchPending()
     fetchSettings()
@@ -29,6 +38,15 @@ export const Sidebar: React.FC = () => {
       fetchPending()
     })
 
+    // Listen to real-time refund requests and updates
+    const unsubscribeRefund = window.electronAPI.on('refund:updated', () => {
+      fetchRefundPendingCount()
+    })
+
+    const unsubscribeRefundNew = window.electronAPI.on('refund:new_request', () => {
+      fetchRefundPendingCount()
+    })
+
     // Listen to real-time Telegram Bot connection status updates
     const unsubscribeBot = window.electronAPI.on('telegram:status', (status: any) => {
       useSettingsStore.setState({ botStatus: status })
@@ -36,18 +54,11 @@ export const Sidebar: React.FC = () => {
 
     return () => {
       unsubscribeActivation()
+      unsubscribeRefund()
+      unsubscribeRefundNew()
       unsubscribeBot()
     }
   }, [])
-
-  const fetchRefundPendingCount = async () => {
-    try {
-      if ((window.electronAPI as any).getRefundPendingCount) {
-        const count = await (window.electronAPI as any).getRefundPendingCount()
-        setRefundPendingCount(count || 0)
-      }
-    } catch {}
-  }
 
   const pendingCount = pendingRequests.filter(
     (r: any) => r.status === 'PENDING' || r.status === 'CODE_GENERATED'

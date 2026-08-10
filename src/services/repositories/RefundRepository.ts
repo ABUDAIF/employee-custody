@@ -1,6 +1,7 @@
 import { prisma } from '../db/prismaClient'
 import { RefundRequest } from '@prisma/client'
 import { employeeRepository } from './EmployeeRepository'
+import { eventBus } from '../../main/eventBus'
 
 export class RefundRepository {
   public async generateRequestNo(): Promise<string> {
@@ -82,6 +83,9 @@ export class RefundRepository {
           ledgerEntry: true
         }
       })
+
+      eventBus.broadcast('refund:new_request', refundRequest)
+      eventBus.broadcast('refund:updated')
 
       return {
         success: true,
@@ -198,6 +202,8 @@ export class RefundRepository {
           }
         })
       }
+
+      eventBus.broadcast('refund:updated')
 
       // Instant Telegram Notification to Employee
       if (request.employee && request.employee.telegramId) {
