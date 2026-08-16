@@ -44,6 +44,7 @@ model ActivationRequest {
   @@index([telegramId])
   @@index([otpCode])
   @@index([status])
+  @@index([employeeId])
 }
 
 model LedgerEntry {
@@ -71,6 +72,7 @@ model LedgerEntry {
   @@index([type])
   @@index([date])
   @@index([category])
+  @@index([monthSnapshotId])
 }
 
 model LedgerAttachment {
@@ -134,6 +136,8 @@ model EmployeeMonthSnapshot {
   closingBalance     Float
   transactionCount   Int
 
+  @@index([employeeId])
+  @@index([monthSnapshotId])
   @@unique([monthSnapshotId, employeeId])
 }
 
